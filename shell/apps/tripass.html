@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TriPass</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg:#0e1015; --surface:#161922; --surface2:#1e222d; --border:#272b38;
+    --text:#e9ebf1; --dim:#868ca0; --dimmer:#565c6f;
+    --accent:#5ee6c7; --accent-soft:rgba(94,230,199,.14);
+    --link:#8b93ff; --danger:#ff6b7a; --danger-soft:rgba(255,107,122,.14); --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    min-height:100vh;font-size:14px;}
+  button, input{font-family:inherit;font-size:13px;}
+  .brand{font-size:18px;font-weight:600;}
+  .brand span{color:var(--accent);}
+
+  /* ---------- Login ---------- */
+  #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;}
+  #loginBox{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 44px;text-align:center;min-width:340px;}
+  #loginBox .sub{color:var(--dimmer);font-size:13px;margin:6px 0 24px;}
+  .accountRow{display:flex;gap:12px;justify-content:center;margin-bottom:18px;}
+  .accountBtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:14px 22px;border-radius:10px;cursor:pointer;font-size:14px;min-width:90px;}
+  .accountBtn:hover{border-color:var(--accent);color:var(--accent);}
+  .accountBtn.chosen{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);}
+  #masterStep{display:none;margin-top:8px;}
+  #masterInput{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:10px 12px;border-radius:8px;text-align:center;letter-spacing:2px;margin-bottom:10px;}
+  #masterInput:focus{outline:none;border-color:var(--accent);}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:9px 16px;border-radius:8px;cursor:pointer;white-space:nowrap;}
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);width:100%;}
+  .btn.danger{color:var(--danger);border-color:var(--danger);}
+  #loginMsg{font-size:12px;color:var(--danger);min-height:16px;margin-top:8px;}
+  #firstTimeNote{font-size:11px;color:var(--dimmer);margin-top:10px;}
+
+  /* ---------- Vault ---------- */
+  #vault{display:none;max-width:760px;margin:0 auto;padding:24px 20px;}
+  #vaultTop{display:flex;align-items:center;gap:14px;margin-bottom:22px;}
+  #vaultTop .spacer{flex:1;}
+  #accountBadge{font-size:12px;color:var(--dim);padding:5px 12px;background:var(--surface2);border-radius:20px;}
+
+  #addForm{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;margin-bottom:20px;display:none;}
+  #addForm.show{display:block;}
+  #addForm .row{display:flex;gap:10px;margin-bottom:10px;}
+  #addForm input{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);
+    padding:9px 12px;border-radius:8px;}
+  #addForm input:focus{outline:none;border-color:var(--accent);}
+
+  .entry{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px 18px;margin-bottom:10px;display:flex;align-items:center;gap:14px;}
+  .entry .site{font-weight:600;min-width:130px;}
+  .entry .user{color:var(--dim);font-size:13px;min-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .entry .pw{flex:1;font-family:Consolas,monospace;color:var(--dim);letter-spacing:1px;}
+  .entry .notes{color:var(--dimmer);font-size:12px;font-style:italic;}
+  .entry .actions{display:flex;gap:6px;}
+  .iconbtn{background:var(--surface2);border:1px solid var(--border);color:var(--dim);
+    width:30px;height:30px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .iconbtn:hover{border-color:var(--accent);color:var(--accent);}
+  .iconbtn.danger:hover{border-color:var(--danger);color:var(--danger);}
+  #empty{text-align:center;color:var(--dimmer);margin-top:60px;font-size:13px;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div id="loginBox">
+    <div class="brand">Tri<span>Pass</span></div>
+    <div class="sub">Pick your account</div>
+    <div class="accountRow">
+      <button class="accountBtn" data-account="adithya">Adithya</button>
+      <button class="accountBtn" data-account="tarun">Tarun</button>
+      <button class="accountBtn" data-account="arjun">Arjun</button>
+    </div>
+    <div id="masterStep">
+      <input id="masterInput" type="password" placeholder="Master password">
+      <button id="btnUnlock" class="btn primary">Unlock</button>
+      <div id="loginMsg"></div>
+      <div id="firstTimeNote"></div>
+    </div>
+  </div>
+</div>
+
+<div id="vault">
+  <div id="vaultTop">
+    <div class="brand">Tri<span>Pass</span></div>
+    <div class="spacer"></div>
+    <span id="accountBadge">—</span>
+    <button id="btnAddToggle" class="btn primary" style="width:auto;">+ Add Entry</button>
+    <button id="btnLock" class="btn">Lock</button>
+  </div>
+
+  <div id="addForm">
+    <div class="row">
+      <input id="newSite" placeholder="App / site name (e.g. TriMail)">
+      <input id="newUser" placeholder="Username or email">
+    </div>
+    <div class="row">
+      <input id="newPass" placeholder="Password" type="text">
+      <input id="newNotes" placeholder="Notes (optional)">
+    </div>
+    <div class="row" style="margin-bottom:0;">
+      <button id="btnSaveEntry" class="btn primary" style="width:auto;">Save Entry</button>
+      <button id="btnCancelAdd" class="btn">Cancel</button>
+    </div>
+  </div>
+
+  <div id="entryList"></div>
+  <div id="empty" style="display:none;">No entries yet — add your first one above.</div>
+</div>
+
+<script>
+const FIREBASE_HOST = 'mysterysolver-trimangees-default-rtdb.firebaseio.com';
+firebase.initializeApp({ databaseURL: 'https://' + FIREBASE_HOST });
+const db = firebase.database();
+const el = id => document.getElementById(id);
+
+let account = null;
+let cryptoKey = null;   // derived AES-GCM key, held only in memory for this session
+let entries = {};       // id -> {site, user, encPass, notes}
+
+// ---------- Crypto helpers ----------
+function b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function unb64(str){ return Uint8Array.from(atob(str), c => c.charCodeAt(0)); }
+
+async function deriveKey(password, saltB64){
+  const salt = unb64(saltB64);
+  const baseKey = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 150000, hash: 'SHA-256' },
+    baseKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptStr(key, plaintext){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+  return b64(iv) + '.' + b64(ct);
+}
+
+async function decryptStr(key, packed){
+  const [ivB64, ctB64] = packed.split('.');
+  const iv = unb64(ivB64), ct = unb64(ctB64);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+  return new TextDecoder().decode(pt);
+}
+
+function randomSalt(){ return b64(crypto.getRandomValues(new Uint8Array(16))); }
+
+// ---------- Login flow ----------
+let chosenAccount = null;
+
+document.querySelectorAll('.accountBtn').forEach(btn => {
+  btn.onclick = async () => {
+    document.querySelectorAll('.accountBtn').forEach(b => b.classList.remove('chosen'));
+    btn.classList.add('chosen');
+    chosenAccount = btn.dataset.account;
+    el('masterStep').style.display = 'block';
+    el('loginMsg').textContent = '';
+    el('masterInput').value = '';
+    el('masterInput').focus();
+
+    const metaSnap = await db.ref('tripass/' + chosenAccount + '/meta').once('value');
+    el('firstTimeNote').textContent = metaSnap.val()
+      ? ''
+      : 'No master password set yet for this account — whatever you type and unlock with will become it.';
+  };
+});
+
+el('btnUnlock').onclick = () => attemptUnlock();
+el('masterInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') attemptUnlock(); });
+
+async function attemptUnlock(){
+  if(!chosenAccount){ return; }
+  const pw = el('masterInput').value;
+  if(!pw){ el('loginMsg').textContent = 'Enter a master password.'; return; }
+  el('loginMsg').textContent = '';
+
+  const metaRef = db.ref('tripass/' + chosenAccount + '/meta');
+  const metaSnap = await metaRef.once('value');
+  const meta = metaSnap.val();
+
+  if(!meta){
+    // First time for this account: this password becomes the master password
+    const salt = randomSalt();
+    const key = await deriveKey(pw, salt);
+    const verify = await encryptStr(key, 'TRIPASS_OK');
+    await metaRef.set({ salt, verify });
+    cryptoKey = key;
+    account = chosenAccount;
+    enterVault();
+    return;
+  }
+
+  try{
+    const key = await deriveKey(pw, meta.salt);
+    const check = await decryptStr(key, meta.verify);
+    if(check !== 'TRIPASS_OK') throw new Error('mismatch');
+    cryptoKey = key;
+    account = chosenAccount;
+    enterVault();
+  }catch(e){
+    el('loginMsg').textContent = 'Wrong master password.';
+  }
+}
+
+function enterVault(){
+  el('loginScreen').style.display = 'none';
+  el('vault').style.display = 'block';
+  el('accountBadge').textContent = account.charAt(0).toUpperCase() + account.slice(1);
+  loadEntries();
+}
+
+el('btnLock').onclick = () => {
+  cryptoKey = null; account = null; entries = {};
+  el('vault').style.display = 'none';
+  el('loginScreen').style.display = 'flex';
+  el('addForm').classList.remove('show');
+  document.querySelectorAll('.accountBtn').forEach(b => b.classList.remove('chosen'));
+  el('masterStep').style.display = 'none';
+};
+
+// ---------- Entries ----------
+function entriesRef(){ return db.ref('tripass/' + account + '/entries'); }
+
+function loadEntries(){
+  entriesRef().once('value').then(snap => {
+    entries = snap.val() || {};
+    renderEntries();
+  });
+}
+
+async function renderEntries(){
+  const list = el('entryList');
+  list.innerHTML = '';
+  const ids = Object.keys(entries);
+  el('empty').style.display = ids.length ? 'none' : 'block';
+  for(const id of ids){
+    const e = entries[id];
+    const row = document.createElement('div');
+    row.className = 'entry';
+    row.innerHTML =
+      '<div class="site">' + escapeHtml(e.site) + '</div>' +
+      '<div class="user">' + escapeHtml(e.user || '') + '</div>' +
+      '<div class="pw" data-id="' + id + '">••••••••</div>' +
+      (e.notes ? '<div class="notes">' + escapeHtml(e.notes) + '</div>' : '') +
+      '<div class="actions">' +
+        '<button class="iconbtn" data-act="show" data-id="' + id + '" title="Show/hide">👁</button>' +
+        '<button class="iconbtn" data-act="copy" data-id="' + id + '" title="Copy password">⧉</button>' +
+        '<button class="iconbtn danger" data-act="del" data-id="' + id + '" title="Delete">✕</button>' +
+      '</div>';
+    list.appendChild(row);
+  }
+  list.querySelectorAll('[data-act=show]').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.dataset.id;
+      const cell = list.querySelector('.pw[data-id="' + id + '"]');
+      if(cell.dataset.revealed === '1'){
+        cell.textContent = '••••••••';
+        cell.dataset.revealed = '0';
+      } else {
+        try{
+          const plain = await decryptStr(cryptoKey, entries[id].encPass);
+          cell.textContent = plain;
+          cell.dataset.revealed = '1';
+        }catch(e){ cell.textContent = '(decrypt failed)'; }
+      }
+    };
+  });
+  list.querySelectorAll('[data-act=copy]').forEach(btn => {
+    btn.onclick = async () => {
+      const id = btn.dataset.id;
+      try{
+        const plain = await decryptStr(cryptoKey, entries[id].encPass);
+        await navigator.clipboard.writeText(plain);
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = '⧉'; }, 1200);
+      }catch(e){ /* clipboard may be unavailable in some contexts */ }
+    };
+  });
+  list.querySelectorAll('[data-act=del]').forEach(btn => {
+    btn.onclick = () => {
+      const id = btn.dataset.id;
+      if(!confirm('Delete "' + entries[id].site + '"?')) return;
+      entriesRef().child(id).remove().then(() => {
+        delete entries[id];
+        renderEntries();
+      });
+    };
+  });
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : s;
+  return d.innerHTML;
+}
+
+el('btnAddToggle').onclick = () => {
+  el('addForm').classList.add('show');
+  el('newSite').focus();
+};
+el('btnCancelAdd').onclick = () => {
+  el('addForm').classList.remove('show');
+  ['newSite','newUser','newPass','newNotes'].forEach(id => el(id).value = '');
+};
+
+el('btnSaveEntry').onclick = async () => {
+  const site = el('newSite').value.trim();
+  const user = el('newUser').value.trim();
+  const pass = el('newPass').value;
+  const notes = el('newNotes').value.trim();
+  if(!site || !pass){ alert('Site name and password are required.'); return; }
+  const encPass = await encryptStr(cryptoKey, pass);
+  const ref = entriesRef().push();
+  const data = { site, user, encPass, notes };
+  await ref.set(data);
+  entries[ref.key] = data;
+  renderEntries();
+  el('btnCancelAdd').click();
+};
+</script>
+</body>
+</html>

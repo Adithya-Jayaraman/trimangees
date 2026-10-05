@@ -1,0 +1,17 @@
+#!/bin/sh
+# Runs as ROOT inside the X server that xinit just started.
+# Lets the desktop user talk to this X server, then drops to that user.
+xhost +si:localuser:trimangees >/dev/null 2>&1
+
+# Readiness marker (used by the automated boot test; harmless otherwise)
+(
+  n=0
+  until wmctrl -l 2>/dev/null | grep -q 'TrimangeesOS Shell'; do
+    n=$((n+1)); [ "$n" -gt 400 ] && exit 0; sleep 2
+  done
+  mkdir -p /run/trimangees; date > /run/trimangees/ready
+  echo "TRIMANGEES_SHELL_READY" > /dev/ttyS0 2>/dev/null
+  if grep -q 'trimangees.selftest=1' /proc/cmdline; then /usr/local/bin/trimangees-selftest > /dev/ttyS0 2>&1; fi
+) &
+
+exec runuser -u trimangees -- /usr/local/bin/trimangees-session

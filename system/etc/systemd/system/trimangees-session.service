@@ -1,0 +1,25 @@
+[Unit]
+Description=TrimangeesOS desktop session
+After=systemd-user-sessions.service trifs-mount.service network.target sound.target getty@tty1.service
+Wants=trifs-mount.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/bin/install -d -m 0700 -o trimangees -g trimangees /run/user/1000
+ExecStartPre=/usr/bin/install -d -m 0755 -o trimangees -g trimangees /var/log/trimangees /run/trimangees
+ExecStart=/usr/bin/xinit /usr/local/bin/trimangees-xclient -- /usr/bin/Xorg :0 vt1 -nolisten tcp -noreset
+Restart=always
+RestartSec=2
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+UtmpIdentifier=tty1
+UtmpMode=user
+
+[Install]
+WantedBy=graphical.target

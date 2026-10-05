@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TriKeep</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg:#0e1015; --surface:#161922; --surface2:#1e222d; --border:#272b38;
+    --text:#e9ebf1; --dim:#868ca0; --dimmer:#565c6f;
+    --accent:#5ee6c7; --accent-soft:rgba(94,230,199,.14);
+    --link:#8b93ff; --danger:#ff6b7a; --radius:12px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    min-height:100vh;font-size:14px;}
+  button, input, textarea{font-family:inherit;font-size:13px;}
+
+  /* ---------- Login ---------- */
+  #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;}
+  #loginBox{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 44px;text-align:center;}
+  .brand{font-size:18px;font-weight:600;}
+  .brand span{color:var(--accent);}
+  #loginBox .sub{color:var(--dimmer);font-size:13px;margin:6px 0 22px;}
+  .accountRow{display:flex;gap:12px;}
+  .accountBtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:14px 22px;border-radius:10px;cursor:pointer;font-size:14px;min-width:90px;}
+  .accountBtn:hover{border-color:var(--accent);color:var(--accent);}
+
+  /* ---------- Board ---------- */
+  #board{display:none;max-width:1100px;margin:0 auto;padding:20px;}
+  #top{display:flex;align-items:center;gap:14px;margin-bottom:18px;}
+  #top .spacer{flex:1;}
+  #accountBadge{font-size:12px;color:var(--dim);padding:5px 12px;background:var(--surface2);border-radius:20px;}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:8px 15px;border-radius:8px;cursor:pointer;white-space:nowrap;}
+  .btn:hover{border-color:var(--accent);}
+
+  #composer{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px 16px;margin-bottom:22px;cursor:text;}
+  #composer.expanded{cursor:default;}
+  #composerTitle{width:100%;background:transparent;border:none;color:var(--text);font-size:15px;font-weight:600;
+    outline:none;margin-bottom:6px;display:none;}
+  #composerTitle.show{display:block;}
+  #composerBody{width:100%;background:transparent;border:none;color:var(--text);font-size:14px;
+    outline:none;resize:none;min-height:24px;font-family:inherit;}
+  #composerActions{display:none;justify-content:space-between;align-items:center;margin-top:10px;}
+  #composerActions.show{display:flex;}
+  .colorRow{display:flex;gap:6px;}
+  .swatch{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
+  .swatch.active{border-color:var(--text);}
+
+  #masonry{column-count:4;column-gap:16px;}
+  @media(max-width:1000px){#masonry{column-count:3;}}
+  @media(max-width:700px){#masonry{column-count:2;}}
+  @media(max-width:480px){#masonry{column-count:1;}}
+
+  .note{break-inside:avoid;border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;
+    border:1px solid var(--border);position:relative;}
+  .note.pinned{border-color:var(--accent);}
+  .note h3{margin:0 0 6px;font-size:15px;font-weight:600;word-break:break-word;}
+  .note p{margin:0;font-size:13.5px;line-height:1.5;color:var(--text);white-space:pre-wrap;word-break:break-word;}
+  .note .meta{margin-top:10px;display:flex;justify-content:flex-end;gap:6px;opacity:0;transition:opacity .12s;}
+  .note:hover .meta{opacity:1;}
+  .iconbtn{background:rgba(255,255,255,.06);border:none;color:var(--dim);width:26px;height:26px;border-radius:6px;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;}
+  .iconbtn:hover{background:rgba(255,255,255,.14);color:var(--text);}
+  .pinIcon{position:absolute;top:10px;right:10px;background:none;border:none;color:var(--dimmer);cursor:pointer;font-size:14px;}
+  .pinIcon.active{color:var(--accent);}
+  #empty{text-align:center;color:var(--dimmer);margin-top:60px;font-size:13px;}
+  #sectionLabel{font-size:12px;color:var(--dimmer);margin:20px 0 10px;text-transform:none;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div id="loginBox">
+    <div class="brand">Tri<span>Keep</span></div>
+    <div class="sub">Pick your account</div>
+    <div class="accountRow">
+      <button class="accountBtn" data-account="adithya">Adithya</button>
+      <button class="accountBtn" data-account="tarun">Tarun</button>
+      <button class="accountBtn" data-account="arjun">Arjun</button>
+    </div>
+  </div>
+</div>
+
+<div id="board">
+  <div id="top">
+    <div class="brand">Tri<span>Keep</span></div>
+    <div class="spacer"></div>
+    <span id="accountBadge">—</span>
+    <button id="btnSwitch" class="btn">Switch Account</button>
+  </div>
+
+  <div id="composer">
+    <input id="composerTitle" placeholder="Title">
+    <textarea id="composerBody" placeholder="Take a note..." rows="1"></textarea>
+    <div id="composerActions">
+      <div class="colorRow" id="composerColors"></div>
+      <button id="btnAddNote" class="btn">Add</button>
+    </div>
+  </div>
+
+  <div id="pinnedSection" style="display:none;">
+    <div id="sectionLabel">Pinned</div>
+    <div id="masonryPinned" style="column-count:4;column-gap:16px;"></div>
+  </div>
+  <div id="sectionLabel2" style="display:none;">Others</div>
+  <div id="masonry"></div>
+  <div id="empty">No notes yet — click above to add your first one.</div>
+</div>
+
+<script>
+const FIREBASE_HOST = 'firepass-a0a81-default-rtdb.firebaseio.com';
+firebase.initializeApp({ databaseURL: 'https://' + FIREBASE_HOST });
+const db = firebase.database();
+const el = id => document.getElementById(id);
+
+const COLORS = [
+  { name: 'default', bg: '#161922', border: '#272b38' },
+  { name: 'teal', bg: 'rgba(94,230,199,.10)', border: '#5ee6c7' },
+  { name: 'violet', bg: 'rgba(139,147,255,.10)', border: '#8b93ff' },
+  { name: 'gold', bg: 'rgba(240,198,116,.10)', border: '#f0c674' },
+  { name: 'rose', bg: 'rgba(255,107,122,.10)', border: '#ff6b7a' },
+  { name: 'gray', bg: 'rgba(140,148,168,.10)', border: '#8c94a8' }
+];
+
+let account = null;
+let notes = {};
+let composerColor = COLORS[0].name;
+
+// ---------- Login ----------
+document.querySelectorAll('.accountBtn').forEach(btn => {
+  btn.onclick = () => {
+    account = btn.dataset.account;
+    el('loginScreen').style.display = 'none';
+    el('board').style.display = 'block';
+    el('accountBadge').textContent = account.charAt(0).toUpperCase() + account.slice(1);
+    loadNotes();
+  };
+});
+el('btnSwitch').onclick = () => {
+  account = null; notes = {};
+  el('board').style.display = 'none';
+  el('loginScreen').style.display = 'flex';
+};
+
+// ---------- Composer ----------
+COLORS.forEach(c => {
+  const sw = document.createElement('div');
+  sw.className = 'swatch' + (c.name === composerColor ? ' active' : '');
+  sw.style.background = c.bg === COLORS[0].bg ? '#2a2f3d' : c.border;
+  sw.dataset.color = c.name;
+  sw.onclick = () => {
+    composerColor = c.name;
+    document.querySelectorAll('#composerColors .swatch').forEach(s => s.classList.remove('active'));
+    sw.classList.add('active');
+  };
+  el('composerColors').appendChild(sw);
+});
+
+function expandComposer(){
+  el('composer').classList.add('expanded');
+  el('composerTitle').classList.add('show');
+  el('composerActions').classList.add('show');
+}
+function collapseComposer(){
+  el('composer').classList.remove('expanded');
+  el('composerTitle').classList.remove('show');
+  el('composerActions').classList.remove('show');
+  el('composerTitle').value = '';
+  el('composerBody').value = '';
+  el('composerBody').style.height = 'auto';
+  composerColor = COLORS[0].name;
+  document.querySelectorAll('#composerColors .swatch').forEach((s,i) => s.classList.toggle('active', i===0));
+}
+el('composerBody').addEventListener('focus', expandComposer);
+el('composerBody').addEventListener('input', () => {
+  el('composerBody').style.height = 'auto';
+  el('composerBody').style.height = el('composerBody').scrollHeight + 'px';
+});
+document.addEventListener('click', (e) => {
+  if(!el('composer').contains(e.target) && el('composer').classList.contains('expanded')){
+    if(!el('composerTitle').value && !el('composerBody').value){ collapseComposer(); }
+  }
+});
+
+el('btnAddNote').onclick = () => {
+  const title = el('composerTitle').value.trim();
+  const body = el('composerBody').value.trim();
+  if(!title && !body) { collapseComposer(); return; }
+  const ref = notesRef().push();
+  const data = { title, body, color: composerColor, pinned: false, updatedAt: Date.now() };
+  ref.set(data).then(() => {
+    notes[ref.key] = data;
+    renderNotes();
+    collapseComposer();
+  });
+};
+
+// ---------- Firebase ----------
+function notesRef(){ return db.ref('trikeep/' + account + '/notes'); }
+
+function loadNotes(){
+  notesRef().once('value').then(snap => {
+    notes = snap.val() || {};
+    renderNotes();
+  });
+}
+
+function colorOf(name){ return COLORS.find(c => c.name === name) || COLORS[0]; }
+
+function renderNotes(){
+  const ids = Object.keys(notes);
+  el('empty').style.display = ids.length ? 'none' : 'block';
+
+  const pinnedIds = ids.filter(id => notes[id].pinned).sort((a,b) => notes[b].updatedAt - notes[a].updatedAt);
+  const otherIds = ids.filter(id => !notes[id].pinned).sort((a,b) => notes[b].updatedAt - notes[a].updatedAt);
+
+  el('pinnedSection').style.display = pinnedIds.length ? 'block' : 'none';
+  el('sectionLabel2').style.display = (pinnedIds.length && otherIds.length) ? 'block' : 'none';
+
+  el('masonryPinned').innerHTML = '';
+  pinnedIds.forEach(id => el('masonryPinned').appendChild(buildNoteCard(id)));
+
+  el('masonry').innerHTML = '';
+  otherIds.forEach(id => el('masonry').appendChild(buildNoteCard(id)));
+}
+
+function buildNoteCard(id){
+  const n = notes[id];
+  const c = colorOf(n.color);
+  const card = document.createElement('div');
+  card.className = 'note' + (n.pinned ? ' pinned' : '');
+  card.style.background = c.bg;
+  card.style.borderColor = n.pinned ? '#5ee6c7' : c.border;
+  card.innerHTML =
+    '<button class="pinIcon' + (n.pinned ? ' active' : '') + '" data-act="pin" data-id="' + id + '" title="Pin">📌</button>' +
+    (n.title ? '<h3>' + escapeHtml(n.title) + '</h3>' : '') +
+    (n.body ? '<p>' + escapeHtml(n.body) + '</p>' : '') +
+    '<div class="meta">' +
+      '<button class="iconbtn" data-act="edit" data-id="' + id + '" title="Edit">✎</button>' +
+      '<button class="iconbtn" data-act="del" data-id="' + id + '" title="Delete">✕</button>' +
+    '</div>';
+
+  card.querySelector('[data-act=pin]').onclick = (e) => {
+    e.stopPropagation();
+    notes[id].pinned = !notes[id].pinned;
+    notesRef().child(id).update({ pinned: notes[id].pinned });
+    renderNotes();
+  };
+  card.querySelector('[data-act=del]').onclick = (e) => {
+    e.stopPropagation();
+    if(!confirm('Delete this note?')) return;
+    notesRef().child(id).remove().then(() => { delete notes[id]; renderNotes(); });
+  };
+  card.querySelector('[data-act=edit]').onclick = (e) => {
+    e.stopPropagation();
+    openEditor(id);
+  };
+  return card;
+}
+
+function openEditor(id){
+  const n = notes[id];
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:100;';
+  const c = colorOf(n.color);
+  overlay.innerHTML =
+    '<div style="background:' + (c.bg==='#2a2f3d'?'#161922':c.bg) + ';border:1px solid ' + c.border + ';border-radius:12px;padding:20px;width:400px;max-width:90vw;">' +
+      '<input id="editTitle" placeholder="Title" style="width:100%;background:transparent;border:none;color:var(--text);font-size:16px;font-weight:600;outline:none;margin-bottom:8px;">' +
+      '<textarea id="editBody" placeholder="Note" rows="6" style="width:100%;background:transparent;border:none;color:var(--text);font-size:14px;outline:none;resize:vertical;font-family:inherit;"></textarea>' +
+      '<div class="colorRow" id="editColors" style="margin:12px 0;"></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
+        '<button id="editCancel" class="btn">Cancel</button>' +
+        '<button id="editSave" class="btn" style="border-color:var(--accent);color:var(--accent);">Save</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  el('editTitle').value = n.title || '';
+  el('editBody').value = n.body || '';
+  let editColor = n.color;
+  COLORS.forEach(col => {
+    const sw = document.createElement('div');
+    sw.className = 'swatch' + (col.name === editColor ? ' active' : '');
+    sw.style.background = col.name === 'default' ? '#2a2f3d' : col.border;
+    sw.onclick = () => {
+      editColor = col.name;
+      overlay.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+    };
+    el('editColors').appendChild(sw);
+  });
+  el('editCancel').onclick = () => document.body.removeChild(overlay);
+  el('editSave').onclick = () => {
+    const title = el('editTitle').value.trim();
+    const body = el('editBody').value.trim();
+    const updated = { title, body, color: editColor, updatedAt: Date.now() };
+    notesRef().child(id).update(updated).then(() => {
+      Object.assign(notes[id], updated);
+      renderNotes();
+      document.body.removeChild(overlay);
+    });
+  };
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s == null ? '' : s;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>

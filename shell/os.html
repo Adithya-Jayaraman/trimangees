@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TrimangeesOS Shell</title>
+<link rel="stylesheet" href="os.css">
+</head>
+<body class="preset-0">
+
+  <!-- Desktop surface: wallpaper + icons + windows live here -->
+  <div id="wallpaper"></div>
+  <div id="desktop">
+    <div id="icons"></div>
+    <div id="windows"></div>
+    <div id="snap-preview" hidden></div>
+  </div>
+
+  <!-- Taskbar -->
+  <div id="taskbar">
+    <button id="start-btn" title="Start">
+      <svg viewBox="0 0 24 24" width="20" height="20">
+        <path d="M13 2 L5 14 L11 14 L9 22 L19 9 L12.5 9 Z"
+              fill="url(#boltGrad)" stroke="#0006" stroke-width=".6"/>
+        <defs>
+          <linearGradient id="boltGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffe873"/>
+            <stop offset="1" stop-color="#ffb020"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </button>
+
+    <div id="search-pill" tabindex="0">
+      <svg viewBox="0 0 24 24" width="14" height="14">
+        <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+        <line x1="15" y1="15" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <input id="search-input" type="text" placeholder="Search TrimangeesOS" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div id="taskbar-apps"></div>
+    <div id="taskbar-ext"></div>
+
+    <div id="clock">
+      <div id="clock-time"></div>
+      <div id="clock-date"></div>
+    </div>
+  </div>
+
+  <!-- Search results panel -->
+  <div id="search-panel" hidden></div>
+
+  <!-- Start menu -->
+  <div id="start-menu" hidden>
+    <div class="sm-profile">
+      <div class="sm-avatar">A</div>
+      <div>
+        <div class="sm-name">Adithya</div>
+        <div class="sm-sub">Trimangees OS</div>
+      </div>
+    </div>
+    <div class="sm-search">
+      <svg viewBox="0 0 24 24" width="14" height="14">
+        <circle cx="10" cy="10" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+        <line x1="15" y1="15" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+      </svg>
+      <input id="sm-search-input" type="text" placeholder="Type to search apps" autocomplete="off" spellcheck="false">
+    </div>
+    <div class="sm-label" id="sm-label">Pinned</div>
+    <div id="sm-tiles"></div>
+    <div class="sm-sep"></div>
+    <div class="sm-power">
+      <button data-power="logout" class="logout">Log out</button>
+      <button data-power="sleep">Sleep</button>
+      <button data-power="restart" class="restart">Restart</button>
+      <button data-power="shutdown" class="shutdown">Shut Down</button>
+    </div>
+  </div>
+
+  <!-- Right-click context menu -->
+  <div id="context-menu" hidden></div>
+
+  <!-- Toast notifications -->
+  <div id="toasts"></div>
+
+  <!-- Lock screen: TrimangeesOS accounts -->
+  <div id="lock">
+    <div class="lock-card">
+      <div class="lock-title"><span class="bolt">&#9889;</span> TrimangeesOS</div>
+      <div id="lock-tiles"></div>
+      <div id="lock-hello"></div>
+      <input id="lock-pin" type="password" inputmode="numeric" maxlength="8"
+             placeholder="PIN" autocomplete="off">
+      <div id="lock-msg"></div>
+      <div class="lock-hint">&#8592; &#8594; to switch user &middot; Enter to sign in</div>
+    </div>
+  </div>
+
+  <!-- Boot splash -->
+  <div id="splash">
+    <div class="splash-inner">
+      <div class="splash-bolt">&#9889;</div>
+      <div class="splash-name">TRIMANGEES OS</div>
+      <div class="splash-sub">storm-powered</div>
+    </div>
+  </div>
+
+  <script src="firebase.js"></script>
+  <script src="extras.js"></script>
+  <script src="os.js"></script>
+</body>
+</html>

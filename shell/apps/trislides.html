@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trimangees Slides</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root{--bg:linear-gradient(135deg,#03000b 0%,#0f172a 100%);--glass:rgba(255,255,255,0.04);--gb:rgba(255,255,255,0.1);--text:#e0e0e0;--muted:rgba(255,255,255,0.55);--cyan:#00f0ff;--purple:#7b2cbf;--pink:#ff6b9d;--amber:#ff9d00;}
+*{margin:0;padding:0;box-sizing:border-box;cursor:none;}
+input,textarea,select,[contenteditable]{cursor:text!important;}
+button,a,.menu-item,.dd-item,.slide-thumb,.layout-opt,.theme-swatch{cursor:pointer!important;}
+body{background:var(--bg);background-attachment:fixed;color:var(--text);font-family:'Outfit',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+.cursor-dot{position:fixed;top:0;left:0;transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;z-index:9999;width:14px;height:14px;background:var(--cyan);border:1px solid #fff;box-shadow:0 0 12px var(--cyan);will-change:transform;transition:background .1s,transform .12s;}
+body.hovering .cursor-dot{transform:translate(-50%,-50%) scale(1.5);background:#ffea00;border-color:#ffea00;box-shadow:0 0 20px #ffea00;}
+.ct{position:fixed;top:0;left:0;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);z-index:9995;filter:blur(4px);opacity:0;animation:ft .7s ease-out forwards;}
+@keyframes ft{0%{opacity:.5;transform:translate(-50%,-50%) scale(1);}100%{opacity:0;transform:translate(-50%,-50%) scale(0);}}
+#starfield{position:fixed;inset:0;z-index:0;pointer-events:none;}
+/* TOPBAR */
+#topbar{display:flex;align-items:center;gap:10px;padding:0 16px;height:52px;background:rgba(3,0,11,0.88);backdrop-filter:blur(20px);border-bottom:1px solid var(--gb);flex-shrink:0;z-index:10;position:relative;}
+#logo{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#fff;text-decoration:none;}
+#logo svg{width:28px;height:28px;}
+.app-name{background:linear-gradient(90deg,var(--pink),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;}
+#pres-name{flex:1;max-width:260px;font-size:14px;font-weight:500;color:var(--text);background:transparent;border:none;outline:none;font-family:'Outfit',sans-serif;padding:4px 8px;border-radius:6px;transition:.15s;}
+#pres-name:focus{background:var(--glass);border:1px solid var(--cyan);}
+#save-st{font-size:11px;color:var(--muted);}
+.tba{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.tb-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:50px;border:1px solid var(--gb);background:var(--glass);color:var(--text);font-size:11px;font-family:'Outfit',sans-serif;font-weight:500;transition:.2s;white-space:nowrap;}
+.tb-btn:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,240,255,.3);color:#fff;}
+.tb-btn.present{background:linear-gradient(90deg,var(--purple),var(--cyan));border:none;color:#fff;}
+.tb-btn.present:hover{box-shadow:0 0 22px rgba(0,240,255,.5);}
+.tb-btn.amber{border-color:rgba(255,157,0,.45);color:rgba(255,157,0,.9);}
+.tb-btn.amber:hover{border-color:var(--amber);color:var(--amber);}
+.tb-btn.primary{background:linear-gradient(90deg,var(--pink),var(--purple));border:none;color:#fff;}
+/* MENUBAR */
+#menubar{display:flex;align-items:center;gap:2px;padding:0 12px;height:32px;background:rgba(3,0,11,0.68);border-bottom:1px solid var(--gb);flex-shrink:0;z-index:10;position:relative;}
+.menu-item{padding:3px 11px;font-size:12px;color:var(--muted);border-radius:4px;position:relative;transition:.15s;font-family:'Outfit',sans-serif;}
+.menu-item:hover{background:var(--glass);color:var(--text);}
+.dropdown{display:none;position:absolute;top:calc(100%+4px);left:0;background:rgba(6,2,18,.98);backdrop-filter:blur(20px);border:1px solid var(--gb);border-radius:10px;min-width:210px;z-index:999;padding:4px;box-shadow:0 14px 45px rgba(0,0,0,.75);}
+.menu-item:hover .dropdown{display:block;}
+.dd-item{display:flex;align-items:center;gap:9px;padding:7px 12px;font-size:12px;color:var(--text);border-radius:6px;white-space:nowrap;transition:.1s;font-family:'Outfit',sans-serif;}
+.dd-item:hover{background:rgba(0,240,255,.08);color:var(--cyan);}
+.dd-item .tri{margin-left:auto;font-size:8px;font-weight:700;background:linear-gradient(90deg,#ff9d00,#00f0ff);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.dd-sep{height:1px;background:var(--gb);margin:3px 0;}
+/* TOOLBAR */
+#toolbar{display:flex;align-items:center;gap:3px;padding:0 10px;height:38px;background:rgba(3,0,11,0.58);border-bottom:1px solid var(--gb);flex-shrink:0;z-index:9;overflow:hidden;}
+.tsep{width:1px;height:20px;background:rgba(255,255,255,.08);margin:0 3px;}
+.tool-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:5px;border:none;background:transparent;color:var(--muted);font-size:12px;transition:.15s;}
+.tool-btn:hover{background:var(--glass);color:var(--cyan);}
+select.ts{height:26px;padding:0 5px;background:var(--glass);border:1px solid var(--gb);border-radius:5px;color:var(--text);font-size:11px;font-family:'Outfit',sans-serif;outline:none;}
+input[type=color].cpick{width:26px;height:26px;padding:2px;border-radius:5px;border:1px solid var(--gb);background:var(--glass);}
+/* MAIN */
+#main{display:flex;flex:1;overflow:hidden;z-index:1;position:relative;}
+/* SLIDE PANEL */
+#slide-panel{width:176px;background:rgba(3,0,11,.88);border-right:1px solid var(--gb);display:flex;flex-direction:column;flex-shrink:0;overflow:hidden;}
+#sp-head{padding:9px 12px 7px;font-size:10px;font-weight:600;color:var(--purple);letter-spacing:1.4px;text-transform:uppercase;border-bottom:1px solid var(--gb);}
+#slide-list{flex:1;overflow-y:auto;padding:7px;}
+.slide-thumb{border:1.5px solid rgba(255,255,255,.08);border-radius:6px;margin-bottom:7px;padding:3px;aspect-ratio:16/9;position:relative;transition:.2s;overflow:hidden;background:rgba(255,255,255,.02);}
+.slide-thumb.active{border-color:var(--cyan);box-shadow:0 0 12px rgba(0,240,255,.22);}
+.slide-thumb:hover:not(.active){border-color:rgba(255,255,255,.2);}
+.tn-num{position:absolute;bottom:3px;right:5px;font-size:9px;color:rgba(255,255,255,.5);font-family:'Outfit',sans-serif;}
+.tn-preview{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:4px;}
+.tn-title-text{font-size:7px;color:#fff;text-align:center;font-family:'Playfair Display',serif;line-height:1.3;overflow:hidden;word-break:break-word;max-height:100%;}
+#sp-add{padding:8px 12px;border-top:1px solid var(--gb);}
+#sp-add button{width:100%;padding:6px;background:rgba(0,240,255,.06);border:1px solid rgba(0,240,255,.2);border-radius:6px;color:var(--cyan);font-size:11px;font-family:'Outfit',sans-serif;transition:.15s;}
+#sp-add button:hover{background:rgba(0,240,255,.14);}
+/* CANVAS + NOTES */
+#center-col{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#canvas-wrap{flex:1;overflow:auto;background:rgba(8,10,24,.72);display:flex;align-items:flex-start;justify-content:center;padding:24px 20px 8px;}
+#slide-editor{width:960px;max-width:100%;aspect-ratio:16/9;border-radius:4px;box-shadow:0 12px 60px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.04);position:relative;overflow:hidden;min-height:540px;flex-shrink:0;}
+#slide-bg{position:absolute;inset:0;z-index:0;}
+#slide-content{position:absolute;inset:0;z-index:1;padding:54px 66px;display:flex;flex-direction:column;justify-content:center;gap:12px;}
+.slide-el [contenteditable]{outline:none;}
+.slide-el [contenteditable]:focus{outline:2px solid rgba(0,240,255,.42);border-radius:3px;outline-offset:2px;}
+.slide-title-el{font-size:42px;font-weight:700;line-height:1.2;color:#fff;font-family:'Playfair Display',serif;width:100%;}
+.slide-subtitle-el{font-size:22px;font-weight:300;color:rgba(255,255,255,.8);font-family:'Outfit',sans-serif;width:100%;}
+.slide-body-el{font-size:18px;line-height:1.65;color:rgba(255,255,255,.9);font-family:'Outfit',sans-serif;width:100%;min-height:36px;}
+.slide-extra{position:absolute;z-index:5;}
+.slide-extra:hover{outline:1px dashed rgba(0,240,255,.35);}
+/* SPEAKER NOTES */
+#notes-bar{height:0;overflow:hidden;background:rgba(3,0,11,.78);border-top:1px solid transparent;flex-shrink:0;display:flex;flex-direction:column;transition:height .2s,border-color .2s;}
+#notes-bar.open{height:80px;border-top-color:var(--gb);}
+#notes-head{padding:4px 14px;font-size:9px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.04);}
+#notes-input{flex:1;background:transparent;border:none;outline:none;color:rgba(255,255,255,.7);font-size:12px;font-family:'Outfit',sans-serif;padding:6px 14px;resize:none;line-height:1.5;}
+#notes-input::placeholder{color:rgba(255,255,255,.2);}
+/* PROPS */
+#props{width:192px;background:rgba(3,0,11,.88);border-left:1px solid var(--gb);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;}
+.props-head{padding:9px 12px 7px;font-size:10px;font-weight:600;color:var(--purple);letter-spacing:1.4px;text-transform:uppercase;border-bottom:1px solid var(--gb);}
+.prop-sec{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.04);}
+.prop-label{font-size:10px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.8px;font-family:'Outfit',sans-serif;}
+.prop-label .badge{font-size:8px;font-weight:700;background:linear-gradient(90deg,var(--amber),var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent;margin-left:3px;}
+.theme-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+.theme-swatch{height:28px;border-radius:5px;border:2px solid transparent;transition:.15s;}
+.theme-swatch:hover,.theme-swatch.active{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,240,255,.3);}
+.layout-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;}
+.layout-opt{padding:7px 4px;background:var(--glass);border:1px solid var(--gb);border-radius:5px;font-size:10px;color:var(--muted);text-align:center;transition:.15s;font-family:'Outfit',sans-serif;}
+.layout-opt:hover,.layout-opt.active{border-color:var(--cyan);color:var(--cyan);}
+/* STATUS */
+#statusbar{display:flex;align-items:center;gap:14px;padding:0 16px;height:24px;background:rgba(3,0,11,.92);border-top:1px solid var(--gb);font-size:10px;color:var(--muted);flex-shrink:0;z-index:10;position:relative;font-family:'Outfit',sans-serif;}
+#statusbar b{color:var(--cyan);font-weight:500;}
+/* PRESENT MODE */
+#present-mode{display:none;position:fixed;inset:0;background:#000;z-index:2000;}
+#present-mode.active{display:block;}
+#ps-slide{width:100%;height:100%;position:relative;overflow:hidden;transition:opacity .3s,transform .3s;}
+#ps-bg{position:absolute;inset:0;}
+#ps-content{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:10% 12%;}
+#ps-title{font-size:clamp(30px,5.5vw,76px);font-weight:700;color:#fff;font-family:'Playfair Display',serif;line-height:1.2;margin-bottom:18px;}
+#ps-sub{font-size:clamp(14px,2.2vw,34px);color:rgba(255,255,255,.85);font-family:'Outfit',sans-serif;font-weight:300;line-height:1.5;}
+#ps-notes{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.7);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:8px 16px;font-size:12px;color:rgba(255,255,255,.7);font-family:'Outfit',sans-serif;max-width:60vw;display:none;z-index:2002;}
+#present-nav{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:2001;}
+#present-nav button{padding:7px 20px;background:rgba(255,255,255,.12);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.18);border-radius:50px;color:#fff;font-size:12px;font-family:'Outfit',sans-serif;transition:.2s;}
+#present-nav button:hover{background:rgba(255,255,255,.22);}
+#ps-counter{position:fixed;top:16px;right:20px;font-size:12px;color:rgba(255,255,255,.5);z-index:2001;font-family:'Outfit',sans-serif;}
+#ps-title-bar{position:fixed;top:16px;left:20px;font-size:11px;color:rgba(255,255,255,.4);z-index:2001;font-family:'Outfit',sans-serif;}
+#ps-timer{position:fixed;top:16px;left:50%;transform:translateX(-50%);font-size:14px;color:rgba(0,240,255,.6);z-index:2001;font-family:'Outfit',monospace;letter-spacing:1px;}
+#ps-notes-toggle{position:fixed;bottom:18px;right:20px;padding:6px 12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);border-radius:50px;color:rgba(255,255,255,.6);font-size:11px;font-family:'Outfit',sans-serif;z-index:2001;}
+/* Lightning canvas */
+#lt-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:2005;pointer-events:none;opacity:0;transition:opacity .05s;}
+::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px;}::-webkit-scrollbar-thumb:hover{background:var(--cyan);}
+</style>
+</head>
+<body>
+<canvas id="starfield"></canvas>
+<div class="cursor-dot" id="cursor"></div>
+
+<div id="topbar">
+  <a id="logo" href="https://trimangees.netlify.app">
+    <svg viewBox="0 0 28 28" fill="none"><ellipse cx="14" cy="18" rx="12" ry="7" fill="#0f172a"/><path d="M3 17 Q7 8 14 7 Q21 6 25 17" stroke="#00f0ff" stroke-width="1.5" fill="none" opacity=".8"/><path d="M5 17 Q9 11 14 10 Q19 9 23 17" stroke="#7b2cbf" stroke-width="1.5" fill="none" opacity=".9"/><path d="M14 7 L12 2 M14 7 L16 1.5 M14 7 L10 3.5" stroke="#00f0ff" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg>
+    Trimangees
+  </a>
+  <span style="color:rgba(255,255,255,.18);font-size:20px;margin:0 2px">›</span>
+  <span class="app-name">Slides</span>
+  <input id="pres-name" type="text" value="Untitled Presentation" spellcheck="false">
+  <span id="save-st">All changes saved</span>
+  <div class="tba">
+    <button class="tb-btn" onclick="addSlide()"><i class="fas fa-plus" style="font-size:10px"></i> Slide</button>
+    <button class="tb-btn" id="notes-toggle-btn" onclick="toggleNotesBar()" title="Toggle speaker notes"><i class="fas fa-sticky-note" style="font-size:10px"></i> Notes</button>
+    <button class="tb-btn amber" onclick="stormStarter()" title="Storm Starter — Trimangees Exclusive">⚡ Storm Starter</button>
+    <button class="tb-btn present" onclick="startPresent(curSlide)"><i class="fas fa-play" style="font-size:10px"></i> Present</button>
+    <button class="tb-btn primary" onclick="exportHTML()"><i class="fas fa-download" style="font-size:10px"></i> Export</button>
+  </div>
+</div>
+
+<div id="menubar">
+  <div class="menu-item">File<div class="dropdown">
+    <div class="dd-item" onclick="newPres()"><i class="fas fa-file fa-fw"></i>New Presentation</div>
+    <div class="dd-item" onclick="stormStarter()" style="color:rgba(255,157,0,.9)">⚡ Storm Starter Template<span class="tri">TRIMANGEES</span></div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="exportHTML()"><i class="fas fa-download fa-fw"></i>Export as HTML</div>
+  </div></div>
+  <div class="menu-item">Slide<div class="dropdown">
+    <div class="dd-item" onclick="addSlide()"><i class="fas fa-plus fa-fw"></i>New Slide</div>
+    <div class="dd-item" onclick="dupSlide()"><i class="fas fa-copy fa-fw"></i>Duplicate</div>
+    <div class="dd-item" onclick="delSlide()"><i class="fas fa-trash fa-fw"></i>Delete</div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="moveSlide(-1)"><i class="fas fa-arrow-up fa-fw"></i>Move Up</div>
+    <div class="dd-item" onclick="moveSlide(1)"><i class="fas fa-arrow-down fa-fw"></i>Move Down</div>
+  </div></div>
+  <div class="menu-item">Insert<div class="dropdown">
+    <div class="dd-item" onclick="addTextBox()"><i class="fas fa-font fa-fw"></i>Text Box</div>
+    <div class="dd-item" onclick="addShape('rect')"><i class="fas fa-square fa-fw"></i>Rectangle</div>
+    <div class="dd-item" onclick="addShape('circle')"><i class="fas fa-circle fa-fw"></i>Circle</div>
+    <div class="dd-item" onclick="insImg()"><i class="fas fa-image fa-fw"></i>Image…</div>
+  </div></div>
+  <div class="menu-item">Present<div class="dropdown">
+    <div class="dd-item" onclick="startPresent(0)"><i class="fas fa-play fa-fw"></i>From Beginning</div>
+    <div class="dd-item" onclick="startPresent(curSlide)"><i class="fas fa-forward fa-fw"></i>From This Slide</div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="toggleNotesInPresent()" style="color:rgba(255,157,0,.9)">📝 Toggle Speaker Notes<span class="tri">TRIMANGEES</span></div>
+  </div></div>
+</div>
+
+<div id="toolbar">
+  <select class="ts" onchange="fmtContent('fontName',this.value.replace(/'/g,''))" style="width:118px">
+    <option value="'Playfair Display',serif">Playfair Display</option>
+    <option value="'Outfit',sans-serif">Outfit</option>
+    <option value="Georgia,serif">Georgia</option>
+    <option value="Arial,sans-serif">Arial</option>
+    <option value="'Courier New',monospace">Courier New</option>
+  </select>
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="fmtContent('bold')" style="font-weight:700" title="Bold">B</button>
+  <button class="tool-btn" onclick="fmtContent('italic')" style="font-style:italic" title="Italic">I</button>
+  <button class="tool-btn" onclick="fmtContent('underline')" style="text-decoration:underline;font-size:11px" title="Underline">U</button>
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="fmtContent('justifyLeft')" title="Left"><i class="fas fa-align-left" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmtContent('justifyCenter')" title="Center"><i class="fas fa-align-center" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmtContent('justifyRight')" title="Right"><i class="fas fa-align-right" style="font-size:10px"></i></button>
+  <div class="tsep"></div>
+  <label style="font-size:10px;color:var(--muted)">Color</label>
+  <input type="color" class="cpick" id="tc" value="#ffffff" onchange="fmtContent('foreColor',this.value)">
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="addTextBox()" style="font-size:10px;width:auto;padding:0 8px">+ Text</button>
+  <button class="tool-btn" onclick="addShape('rect')" style="font-size:10px;width:auto;padding:0 8px">▭ Rect</button>
+  <button class="tool-btn" onclick="addShape('circle')" style="font-size:10px;width:auto;padding:0 8px">○ Circle</button>
+</div>
+
+<div id="main">
+  <div id="slide-panel">
+    <div id="sp-head">Slides</div>
+    <div id="slide-list"></div>
+    <div id="sp-add"><button onclick="addSlide()">+ New Slide</button></div>
+  </div>
+  <div id="center-col">
+    <div id="canvas-wrap">
+      <div id="slide-editor">
+        <div id="slide-bg"></div>
+        <div id="slide-content"></div>
+      </div>
+    </div>
+    <div id="notes-bar">
+      <div id="notes-head">Speaker Notes <span style="font-size:8px;font-weight:700;background:linear-gradient(90deg,#ff9d00,#00f0ff);-webkit-background-clip:text;background-clip:text;color:transparent">TRIMANGEES</span></div>
+      <textarea id="notes-input" placeholder="Add speaker notes for this slide…" oninput="saveNotes()"></textarea>
+    </div>
+  </div>
+  <div id="props">
+    <div class="props-head">Design</div>
+    <div class="prop-sec">
+      <div class="prop-label">Theme</div>
+      <div class="theme-grid" id="theme-grid"></div>
+    </div>
+    <div class="prop-sec">
+      <div class="prop-label">Layout</div>
+      <div class="layout-grid" id="layout-grid">
+        <div class="layout-opt active" onclick="setLayout('title')" data-l="title">Title</div>
+        <div class="layout-opt" onclick="setLayout('title-body')" data-l="title-body">+Body</div>
+        <div class="layout-opt" onclick="setLayout('blank')" data-l="blank">Blank</div>
+        <div class="layout-opt" onclick="setLayout('two-col')" data-l="two-col">2 Col</div>
+      </div>
+    </div>
+    <div class="prop-sec">
+      <div class="prop-label">Transition <span class="badge">TRIMANGEES ⚡</span></div>
+      <select class="ts" id="trans-sel" onchange="setTransition(this.value)" style="width:100%">
+        <option value="none">None</option>
+        <option value="fade">Fade</option>
+        <option value="zoom">Zoom</option>
+        <option value="lightning">⚡ Lightning</option>
+      </select>
+    </div>
+    <div class="prop-sec">
+      <div class="prop-label">Slide Size</div>
+      <div style="font-size:11px;color:var(--text)">16:9 · 960×540<br><span style="color:var(--muted);font-size:10px">Widescreen</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="statusbar">
+  <span>Slide <b id="cur-sl">1</b> of <b id="total-sl">1</b></span>
+  <span id="theme-lbl" style="color:var(--muted)"></span>
+  <span style="margin-left:auto;color:rgba(123,44,191,.5)">Trimangees Slides</span>
+</div>
+
+<!-- PRESENT MODE -->
+<div id="present-mode">
+  <div id="ps-slide">
+    <div id="ps-bg"></div>
+    <div id="ps-content"><div id="ps-title"></div><div id="ps-sub"></div></div>
+  </div>
+  <div id="ps-title-bar"></div>
+  <div id="ps-timer">0:00</div>
+  <div id="ps-counter"></div>
+  <div id="ps-notes"></div>
+  <div id="present-nav">
+    <button onclick="pNav(-1)">← Prev</button>
+    <button onclick="stopPresent()">✕ Exit</button>
+    <button onclick="pNav(1)">Next →</button>
+  </div>
+  <button id="ps-notes-toggle" onclick="toggleNotesInPresent()">📝 Notes</button>
+  <canvas id="lt-canvas"></canvas>
+</div>
+
+<input type="file" id="img-in" accept="image/*" style="display:none" onchange="doImg(this)">
+
+<script>
+// ── CURSOR ──
+const cur=document.getElementById('cursor');
+document.addEventListener('mousemove',e=>{cur.style.left=e.clientX+'px';cur.style.top=e.clientY+'px';if(Math.random()>.42){const t=document.createElement('div');t.className='ct';t.style.cssText=`left:${e.clientX}px;top:${e.clientY}px;width:${3+Math.random()*6}px;height:${3+Math.random()*6}px;background:${Math.random()>.5?'var(--purple)':'var(--pink)'}`;document.body.appendChild(t);setTimeout(()=>t.remove(),700);}});
+document.querySelectorAll('a,button,.menu-item,.dd-item,.layout-opt,.theme-swatch,.slide-thumb').forEach(el=>{el.addEventListener('mouseenter',()=>document.body.classList.add('hovering'));el.addEventListener('mouseleave',()=>document.body.classList.remove('hovering'));});
+
+// ── STARFIELD ──
+const sv=document.getElementById('starfield'),sx=sv.getContext('2d');let SW,SH,pts=[];
+function rsStar(){SW=sv.width=window.innerWidth;SH=sv.height=window.innerHeight;}window.addEventListener('resize',rsStar);rsStar();
+class SPt{constructor(){this.x=Math.random()*SW;this.y=Math.random()*SH;this.vx=(Math.random()-.5)*.3;this.vy=(Math.random()-.5)*.3;this.s=Math.random()*1.5;this.a=Math.random()*.3+.1;this.c=Math.random()>.5?'rgba(123,44,191,':'rgba(255,107,157,';}update(){this.x+=this.vx;this.y+=this.vy;if(this.x<0)this.x=SW;if(this.x>SW)this.x=0;if(this.y<0)this.y=SH;if(this.y>SH)this.y=0;}draw(){sx.beginPath();sx.arc(this.x,this.y,this.s,0,Math.PI*2);sx.fillStyle=this.c+this.a+')';sx.fill();}}
+for(let i=0;i<100;i++)pts.push(new SPt());
+function aStar(){sx.clearRect(0,0,SW,SH);pts.forEach(p=>{p.update();p.draw();});requestAnimationFrame(aStar);}aStar();
+
+// ── THEMES ──
+const THEMES=[
+  {name:'Storm',    bg:'linear-gradient(135deg,#03000b,#1a0a3e)'},
+  {name:'Ocean',    bg:'linear-gradient(135deg,#021628,#0a4a82)'},
+  {name:'Forest',   bg:'linear-gradient(135deg,#041205,#0b4020)'},
+  {name:'Ember',    bg:'linear-gradient(135deg,#1a0400,#5a1600)'},
+  {name:'Rose',     bg:'linear-gradient(135deg,#180810,#4a0c24)'},
+  {name:'Midnight', bg:'linear-gradient(135deg,#08080f,#1a1a3a)'},
+];
+const themeGrid=document.getElementById('theme-grid');
+THEMES.forEach((t,i)=>{
+  const d=document.createElement('div');d.className='theme-swatch'+(i===0?' active':'');
+  d.style.background=t.bg;d.title=t.name;
+  d.onclick=()=>{slides[curSlide].theme=i;applyTheme(i);renderThumbAt(curSlide);schedSave();document.querySelectorAll('.theme-swatch').forEach((s,j)=>s.classList.toggle('active',j===i));document.getElementById('theme-lbl').textContent=t.name;};
+  themeGrid.appendChild(d);
+  d.addEventListener('mouseenter',()=>document.body.classList.add('hovering'));
+  d.addEventListener('mouseleave',()=>document.body.classList.remove('hovering'));
+});
+
+// ── SLIDE DATA ──
+function mkSlide(title='New Slide',layout='title',theme=0){return{title,subtitle:'Add subtitle here',body:'Click to add content',theme,layout,transition:'none',extras:[],notes:''};}
+let slides=[mkSlide('Untitled Presentation','title',0)];
+let curSlide=0,presIdx=0,presTimer=0,presTimerInt=null,showNotesInPresent=false;
+let saveT;
+
+function schedSave(){document.getElementById('save-st').textContent='Saving…';clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem('tri_slides',JSON.stringify(slides));}catch(e){}document.getElementById('save-st').textContent='All changes saved';},1500);}
+
+function applyTheme(idx){const t=THEMES[idx]||THEMES[0];document.getElementById('slide-bg').style.background=t.bg;}
+
+function saveNotes(){if(slides[curSlide])slides[curSlide].notes=document.getElementById('notes-input').value;schedSave();}
+function toggleNotesBar(){
+  const bar=document.getElementById('notes-bar');
+  const open=bar.classList.toggle('open');
+  const btn=document.getElementById('notes-toggle-btn');
+  btn.style.borderColor=open?'var(--cyan)':'';
+  btn.style.color=open?'var(--cyan)':'';
+  if(open) document.getElementById('notes-input').focus();
+}
+
+function renderSlide(){
+  const s=slides[curSlide];
+  applyTheme(s.theme);
+  document.getElementById('trans-sel').value=s.transition||'none';
+  document.querySelectorAll('.layout-opt').forEach(o=>o.classList.toggle('active',o.dataset.l===s.layout));
+  document.querySelectorAll('.theme-swatch').forEach((sw,i)=>sw.classList.toggle('active',i===s.theme));
+  document.getElementById('theme-lbl').textContent=THEMES[s.theme]?.name||'';
+  document.getElementById('notes-input').value=s.notes||'';
+  const content=document.getElementById('slide-content');
+  content.innerHTML='';content.style.flexDirection='column';content.style.gap='12px';
+  const layout=s.layout||'title';
+  if(layout!=='blank'){
+    if(layout!=='two-col'){
+      const te=document.createElement('div');te.className='slide-el';
+      const tc=document.createElement('div');tc.className='slide-title-el';tc.contentEditable=true;tc.innerHTML=s.title||'Slide Title';
+      tc.addEventListener('input',()=>{slides[curSlide].title=tc.innerHTML;renderThumbAt(curSlide);schedSave();});te.appendChild(tc);content.appendChild(te);
+    }
+    if(layout==='title'){
+      const se=document.createElement('div');se.className='slide-el';
+      const sc=document.createElement('div');sc.className='slide-subtitle-el';sc.contentEditable=true;sc.innerHTML=s.subtitle||'';
+      sc.addEventListener('input',()=>{slides[curSlide].subtitle=sc.innerHTML;schedSave();});se.appendChild(sc);content.appendChild(se);
+    }
+    if(layout==='title-body'){
+      const be=document.createElement('div');be.className='slide-el';
+      const bc=document.createElement('div');bc.className='slide-body-el';bc.contentEditable=true;bc.innerHTML=s.body||'Click to add content';
+      bc.addEventListener('input',()=>{slides[curSlide].body=bc.innerHTML;schedSave();});be.appendChild(bc);content.appendChild(be);
+    }
+    if(layout==='two-col'){
+      content.style.flexDirection='row';content.style.gap='40px';
+      const left=document.createElement('div');left.style.cssText='flex:1;display:flex;flex-direction:column;gap:10px;';
+      const lt=document.createElement('div');lt.className='slide-title-el';lt.style.fontSize='28px';lt.contentEditable=true;lt.innerHTML=s.title||'Title';lt.addEventListener('input',()=>{slides[curSlide].title=lt.innerHTML;renderThumbAt(curSlide);schedSave();});left.appendChild(lt);
+      const lb=document.createElement('div');lb.className='slide-body-el';lb.contentEditable=true;lb.innerHTML=s.body||'Left column';lb.addEventListener('input',()=>{slides[curSlide].body=lb.innerHTML;schedSave();});left.appendChild(lb);
+      const right=document.createElement('div');right.style.cssText='flex:1;';
+      const rb=document.createElement('div');rb.className='slide-body-el';rb.contentEditable=true;rb.innerHTML=s.subtitle||'Right column';rb.addEventListener('input',()=>{slides[curSlide].subtitle=rb.innerHTML;schedSave();});right.appendChild(rb);
+      content.appendChild(left);content.appendChild(right);
+    }
+  }
+  document.querySelectorAll('#slide-editor .slide-extra').forEach(el=>el.remove());
+  s.extras.forEach((ex,i)=>renderExtra(ex,i));
+  updateStatusBar();updateThumbs();
+}
+
+function renderExtra(ex,idx){
+  const editor=document.getElementById('slide-editor');
+  const div=document.createElement('div');div.className='slide-extra';
+  div.style.cssText=`left:${ex.x||60}px;top:${ex.y||60}px;`;
+  if(ex.type==='text'){const ce=document.createElement('div');ce.contentEditable=true;ce.style.cssText="color:#fff;font-family:'Outfit',sans-serif;font-size:18px;background:rgba(0,0,0,.35);padding:8px 14px;border-radius:5px;min-width:100px;outline:none;";ce.innerHTML=ex.content||'Text';ce.addEventListener('input',()=>{slides[curSlide].extras[idx].content=ce.innerHTML;schedSave();});div.appendChild(ce);}
+  else if(ex.type==='rect'){div.innerHTML=`<div style="width:${ex.w||130}px;height:${ex.h||85}px;background:rgba(123,44,191,.45);border:2px solid #7b2cbf;border-radius:6px;"></div>`;}
+  else if(ex.type==='circle'){div.innerHTML=`<div style="width:${ex.w||100}px;height:${ex.h||100}px;background:rgba(0,240,255,.25);border:2px solid #00f0ff;border-radius:50%;"></div>`;}
+  else if(ex.type==='img'){div.innerHTML=`<img src="${ex.src}" style="max-width:320px;max-height:220px;border-radius:6px;display:block;">`;}
+  let drag=false,ox=0,oy=0;
+  div.addEventListener('mousedown',e=>{drag=true;ox=e.clientX-parseInt(div.style.left||0);oy=e.clientY-parseInt(div.style.top||0);e.stopPropagation();});
+  document.addEventListener('mousemove',e=>{if(!drag)return;div.style.left=(e.clientX-ox)+'px';div.style.top=(e.clientY-oy)+'px';});
+  document.addEventListener('mouseup',()=>{if(drag){drag=false;slides[curSlide].extras[idx].x=parseInt(div.style.left);slides[curSlide].extras[idx].y=parseInt(div.style.top);schedSave();}});
+  editor.appendChild(div);
+}
+
+function fmtContent(cmd,val){document.getElementById('slide-content').focus();document.execCommand(cmd,false,val||null);}
+
+function renderThumbAt(idx){
+  const s=slides[idx];const t=THEMES[s.theme]||THEMES[0];
+  const thumb=document.querySelector(`.slide-thumb[data-idx="${idx}"]`);if(!thumb)return;
+  thumb.style.background=t.bg;
+  const te=thumb.querySelector('.tn-title-text');if(te)te.textContent=(s.title||'Slide '+(idx+1)).replace(/<[^>]+>/g,'');
+}
+
+function updateThumbs(){
+  const list=document.getElementById('slide-list');list.innerHTML='';
+  slides.forEach((s,i)=>{
+    const t=THEMES[s.theme]||THEMES[0];
+    const d=document.createElement('div');d.className='slide-thumb'+(i===curSlide?' active':'');d.dataset.idx=i;d.style.background=t.bg;
+    d.innerHTML=`<div class="tn-preview"><div class="tn-title-text">${(s.title||'Slide '+(i+1)).replace(/<[^>]+>/g,'')}</div></div><div class="tn-num">${i+1}</div>`;
+    d.onclick=()=>{curSlide=i;renderSlide();};list.appendChild(d);
+    d.addEventListener('mouseenter',()=>document.body.classList.add('hovering'));
+    d.addEventListener('mouseleave',()=>document.body.classList.remove('hovering'));
+  });
+}
+
+function updateStatusBar(){document.getElementById('cur-sl').textContent=curSlide+1;document.getElementById('total-sl').textContent=slides.length;}
+
+function addSlide(){slides.splice(curSlide+1,0,mkSlide('New Slide','title',slides[curSlide]?.theme||0));curSlide++;renderSlide();schedSave();}
+function dupSlide(){slides.splice(curSlide+1,0,JSON.parse(JSON.stringify(slides[curSlide])));curSlide++;renderSlide();schedSave();}
+function delSlide(){if(slides.length===1){alert("Can't delete the only slide.");return;}slides.splice(curSlide,1);if(curSlide>=slides.length)curSlide=slides.length-1;renderSlide();schedSave();}
+function moveSlide(dir){const to=curSlide+dir;if(to<0||to>=slides.length)return;[slides[curSlide],slides[to]]=[slides[to],slides[curSlide]];curSlide=to;renderSlide();schedSave();}
+function newPres(){if(!confirm('New presentation?'))return;slides=[mkSlide('Untitled Presentation','title',0)];curSlide=0;renderSlide();schedSave();}
+function setLayout(l){slides[curSlide].layout=l;renderSlide();schedSave();}
+function setTransition(t){slides[curSlide].transition=t;schedSave();}
+function addTextBox(){slides[curSlide].extras.push({type:'text',x:80,y:80,content:'Text box'});renderSlide();schedSave();}
+function addShape(t){slides[curSlide].extras.push({type:t,x:100,y:100,w:t==='circle'?100:130,h:t==='circle'?100:85});renderSlide();schedSave();}
+function insImg(){document.getElementById('img-in').click();}
+function doImg(inp){const f=inp.files[0];if(!f)return;if(f.size>5*1024*1024){alert('Image too large (max 5MB)');inp.value='';return;}const r=new FileReader();r.onload=e=>{slides[curSlide].extras.push({type:'img',x:80,y:80,src:e.target.result});renderSlide();schedSave();};r.readAsDataURL(f);inp.value='';}
+
+// ── TRIMANGEES EXCLUSIVE: STORM STARTER ──
+function stormStarter(){
+  if(slides.length>1&&!confirm('Replace with Storm Starter template?'))return;
+  const th=0;
+  slides=[
+    {title:'Storm Observation Report',subtitle:'By Trimangees Storm Spotters',body:'',theme:0,layout:'title',transition:'lightning',extras:[],notes:'Introduce yourself and the storm event. State date, location, and overview.'},
+    {title:'Sighting Details',subtitle:'',body:'<b>Date &amp; Time:</b> Click to fill<br><b>Location:</b> Click to fill<br><b>GPS:</b> Click to fill<br><b>Observer:</b> Click to fill',theme:0,layout:'title-body',transition:'lightning',extras:[],notes:'Fill in the basic sighting metadata.'},
+    {title:'Cloud &amp; Sky Analysis',subtitle:'',body:'<b>Cloud Type:</b> Click to fill<br><b>Cloud Base:</b> Click to fill<br><b>Beaufort:</b> Click to fill<br><b>Notable Features:</b> Click to fill',theme:1,layout:'title-body',transition:'lightning',extras:[],notes:'Reference BEAUFORT() and CLOUDBASE() from Trimangees Sheets if available.'},
+    {title:'Photographic Evidence',subtitle:'Insert storm photos using Insert → Image',body:'',theme:0,layout:'title',transition:'lightning',extras:[],notes:'Click Insert > Image to add your storm photos here.'},
+    {title:'Conclusions &amp; Analysis',subtitle:'',body:'Click to add your meteorological analysis, comparison to historical sightings, and any IMD cross-references.',theme:0,layout:'title-body',transition:'lightning',extras:[],notes:'Wrap up. Reference any published data, prior sightings, or related phenomena.'},
+  ];
+  curSlide=0;renderSlide();schedSave();
+}
+
+// ── TRIMANGEES EXCLUSIVE: LIGHTNING TRANSITION ──
+let ltRunning=false;
+function playLightning(cb){
+  const ltc=document.getElementById('lt-canvas');
+  ltc.width=window.innerWidth;ltc.height=window.innerHeight;
+  const c=ltc.getContext('2d');
+  ltc.style.opacity='1';ltRunning=true;
+  const W=ltc.width,H=ltc.height;
+  let frame=0;
+  function seg(x1,y1,x2,y2,d){
+    if(d<2){c.moveTo(x1,y1);c.lineTo(x2,y2);return;}
+    const mx=(x1+x2)/2+(Math.random()-.5)*d,my=(y1+y2)/2+(Math.random()-.5)*d;
+    seg(x1,y1,mx,my,d/2);seg(x2,y2,mx,my,d/2);
+    if(Math.random()<.28&&d>22)seg(mx,my,mx+(Math.random()-.5)*d*1.5,my+(Math.random()-.5)*d*1.5,d/3);
+  }
+  const FLASHES=[0.06,0.14,0.24,0.38];
+  function tick(){
+    frame++;const t=frame/24;
+    c.clearRect(0,0,W,H);
+    const isFlash=FLASHES.some(f=>Math.abs(t-f)<0.04);
+    if(isFlash){
+      c.fillStyle='rgba(255,255,255,.82)';c.fillRect(0,0,W,H);
+      for(let i=0;i<3+Math.floor(Math.random()*3);i++){
+        const sx=W*(.2+Math.random()*.6),ex=sx+(Math.random()-.5)*200,ey=H*(.5+Math.random()*.4);
+        c.beginPath();c.strokeStyle=Math.random()>.5?'#ffffff':'#00f0ff';c.lineWidth=.8+Math.random()*2;c.globalAlpha=.9;c.shadowBlur=18;c.shadowColor='#00f0ff';
+        seg(sx,0,ex,ey,H*.4);c.stroke();c.shadowBlur=0;c.globalAlpha=1;
+      }
+    }else if(t<0.5){c.fillStyle=`rgba(0,0,0,${Math.min(.75,t*1.8)})`;c.fillRect(0,0,W,H);}
+    if(t>=0.5){ltc.style.opacity='0';c.clearRect(0,0,W,H);ltRunning=false;setTimeout(cb,60);return;}
+    requestAnimationFrame(tick);
+  }
+  tick();
+}
+
+// ── PRESENT MODE ──
+function startPresent(fromIdx){
+  presIdx=typeof fromIdx==='number'?Math.max(0,Math.min(slides.length-1,fromIdx)):0;
+  document.getElementById('present-mode').classList.add('active');
+  document.getElementById('ps-title-bar').textContent=document.getElementById('pres-name').value||'Trimangees Slides';
+  presTimer=0;clearInterval(presTimerInt);
+  presTimerInt=setInterval(()=>{presTimer++;const m=Math.floor(presTimer/60),s=presTimer%60;document.getElementById('ps-timer').textContent=m+':'+(s<10?'0':'')+s;},1000);
+  showPresSlide();
+}
+function stopPresent(){document.getElementById('present-mode').classList.remove('active');clearInterval(presTimerInt);}
+function showPresSlide(){
+  const s=slides[presIdx],t=THEMES[s.theme]||THEMES[0];
+  document.getElementById('ps-bg').style.background=t.bg;
+  document.getElementById('ps-title').innerHTML=(s.title||'').replace(/<[^>]+>/g,'');
+  document.getElementById('ps-sub').innerHTML=(s.layout==='title-body'?s.body:s.subtitle||'').replace(/<[^>]+>/g,'');
+  document.getElementById('ps-counter').textContent=(presIdx+1)+' / '+slides.length;
+  const notesEl=document.getElementById('ps-notes');
+  notesEl.innerHTML=s.notes||'';
+  notesEl.style.display=(showNotesInPresent&&s.notes)?'block':'none';
+}
+function pNav(d){
+  if(ltRunning)return;
+  const newIdx=Math.max(0,Math.min(slides.length-1,presIdx+d));
+  if(newIdx===presIdx)return;
+  const trans=slides[presIdx]?.transition||'none';
+  if(trans==='lightning'){playLightning(()=>{presIdx=newIdx;showPresSlide();});}
+  else if(trans==='fade'){const ps=document.getElementById('ps-slide');ps.style.transition='opacity .3s';ps.style.opacity='0';setTimeout(()=>{presIdx=newIdx;showPresSlide();ps.style.opacity='1';},300);}
+  else if(trans==='zoom'){const ps=document.getElementById('ps-slide');ps.style.transition='transform .25s,opacity .25s';ps.style.transform='scale(1.07)';ps.style.opacity='0';setTimeout(()=>{presIdx=newIdx;showPresSlide();ps.style.transform='scale(1)';ps.style.opacity='1';},250);}
+  else{presIdx=newIdx;showPresSlide();}
+}
+function toggleNotesInPresent(){showNotesInPresent=!showNotesInPresent;showPresSlide();}
+
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('present-mode').classList.contains('active')){
+    if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();pNav(1);}
+    if(e.key==='ArrowLeft'){e.preventDefault();pNav(-1);}
+    if(e.key==='Escape')stopPresent();
+    if(e.key==='n'||e.key==='N')toggleNotesInPresent();
+    return;
+  }
+  if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();schedSave();}
+});
+
+// ── EXPORT ──
+function exportHTML(){
+  const name=document.getElementById('pres-name').value||'presentation';
+  const shtml=slides.map((s,i)=>{const t=THEMES[s.theme]||THEMES[0];return`<section class="slide" style="background:${t.bg}"><div class="sc"><h1>${(s.title||'').replace(/<[^>]+>/g,'')}</h1><p>${(s.layout==='title-body'?s.body:s.subtitle||'').replace(/<[^>]+>/g,'')}</p></div><div class="sn">${i+1}/${slides.length}</div></section>`;}).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${name}</title><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet"><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Outfit',sans-serif;overflow:hidden;}.slide{width:100vw;height:100vh;display:none;align-items:center;position:relative;}.slide.active{display:flex;}.sc{padding:10% 12%;}.sc h1{font-family:'Playfair Display',serif;font-size:clamp(28px,5vw,72px);color:#fff;margin-bottom:16px;line-height:1.2;}.sc p{font-size:clamp(14px,2vw,32px);color:rgba(255,255,255,.85);font-weight:300;line-height:1.5;}.sn{position:absolute;bottom:20px;right:24px;font-size:12px;color:rgba(255,255,255,.4);}nav{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:10;}nav button{padding:7px 18px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);border-radius:50px;color:#fff;font-size:12px;font-family:'Outfit',sans-serif;cursor:pointer;}</style></head><body>${shtml}<nav><button onclick="nav(-1)">← Prev</button><button onclick="nav(1)">Next →</button></nav><script>let ci=0;const sl=document.querySelectorAll('.slide');function show(i){sl.forEach((s,j)=>s.classList.toggle('active',j===i));}function nav(d){ci=Math.max(0,Math.min(sl.length-1,ci+d));show(ci);}document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')nav(1);if(e.key==='ArrowLeft')nav(-1);});show(0);<\/script></body></html>`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([html],{type:'text/html'}));a.download=name+'.html';a.click();
+}
+
+// ── INIT ──
+try{const s=localStorage.getItem('tri_slides');if(s){const p=JSON.parse(s);if(p.length){slides=p.map(sl=>({...mkSlide(),...sl}));}}}catch(e){}
+renderSlide();
+document.addEventListener('contextmenu',e=>e.preventDefault());
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   Trimangees OS integration — added by the OS upgrade.
+   Gives TRiSLIDES a real native format: Save/Open .trippt
+   (every slide, layout, theme, transition and speaker note).
+   ════════════════════════════════════════════════════════════ */
+(function(){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.id='open-in'; inp.accept='.trippt,.json';
+  inp.style.display='none'; inp.onchange=()=>doOpenPres(inp);
+  document.body.appendChild(inp);
+
+  window.doOpenPres=function(input){
+    const f=input.files[0]; if(!f) return;
+    const rd=new FileReader();
+    rd.onload=()=>{
+      try{
+        const d=JSON.parse(rd.result);
+        if(!Array.isArray(d)||!d.length||typeof d[0].title==='undefined')
+          throw new Error('bad');
+        slides=d.map(sl=>({...mkSlide(),...sl})); curSlide=0;
+        if(typeof renderSlide==='function') renderSlide();
+        else if(typeof render==='function') render();
+        schedSave();
+        const nameEl=document.getElementById('pres-name')||document.getElementById('doc-name');
+        if(nameEl) nameEl.value=f.name.replace(/\.[^.]+$/,'');
+      }catch(e){ alert('Not a valid .trippt presentation'); }
+      input.value='';
+    };
+    rd.readAsText(f);
+  };
+
+  window.exportTRIPPT=function(){
+    const nameEl=document.getElementById('pres-name')||document.getElementById('doc-name');
+    const name=(nameEl&&nameEl.value)||'presentation';
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(slides)],{type:'application/json'}));
+    a.download=name+'.trippt'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),10000);
+  };
+
+  const fileMenu=[...document.querySelectorAll('.menu-item')]
+    .find(m=>m.textContent.trim().startsWith('File'));
+  const dd=fileMenu&&fileMenu.querySelector('.dropdown');
+  if(dd){
+    const mk=(html,fn)=>{const d=document.createElement('div');
+      d.className='dd-item';d.innerHTML=html;d.onclick=fn;return d;};
+    dd.insertBefore(mk('<i class="fas fa-folder-open fa-fw"></i>Open .trippt',
+      ()=>inp.click()), dd.children[1]);
+    dd.appendChild(mk('<i class="fas fa-save fa-fw"></i>Save as .trippt',
+      ()=>exportTRIPPT()));
+  }
+})();
+</script>
+</body>
+</html>

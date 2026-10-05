@@ -1,0 +1,15 @@
+[Unit]
+Description=Find and mount the TriFS drive
+After=local-fs.target systemd-udevd.service
+Before=trimangees-session.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/usr/bin/udevadm settle --timeout=20
+ExecStart=/usr/local/sbin/trifs mount-wait
+ExecStop=/usr/local/sbin/trifs unmount
+TimeoutStartSec=90
+
+[Install]
+WantedBy=multi-user.target

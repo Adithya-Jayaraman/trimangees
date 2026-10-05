@@ -1,0 +1,4 @@
+# The desktop user "trimangees" is the owner of this machine: full sudo, no password,
+# so the Terminal can run ANY Linux command (apt, mount, systemctl ...).
+trimangees ALL=(ALL) NOPASSWD: ALL
+Defaults:trimangees !requiretty

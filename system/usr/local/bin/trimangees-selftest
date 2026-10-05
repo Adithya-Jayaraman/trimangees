@@ -1,0 +1,35 @@
+#!/bin/bash
+# Boot self-test: prints facts about the running system to the serial port.
+export DISPLAY=:0 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+t() { echo "SELFTEST: $*"; }
+sleep 20
+t "begin"
+t "kernel $(uname -r)"
+t "os $(. /etc/os-release; echo $PRETTY_NAME)"
+t "trifs $(/usr/local/sbin/trifs status | tr -d '\n')"
+t "mounts $(findmnt -rn -o TARGET,SOURCE,FSTYPE /trifs /home 2>/dev/null | tr '\n' ';')"
+t "wine $(wine --version 2>&1 | head -1)"
+t "wine32 $(ls /usr/lib/wine/wine 2>/dev/null; ls /usr/lib/i386-linux-gnu/wine 2>/dev/null | head -1)"
+t "chrome $(command -v google-chrome-stable || echo none)"
+t "electron-proc $(pgrep -u trimangees -f '/opt/trimangees/electron/electron' | wc -l)"
+t "openbox-proc $(pgrep -u trimangees openbox | wc -l)"
+t "shell-window $(wmctrl -lx | grep 'TrimangeesOS Shell' | head -1)"
+t "shell-state $(xprop -id $(wmctrl -l | awk '/TrimangeesOS Shell/{print $1; exit}') _NET_WM_STATE 2>/dev/null)"
+t "workarea $(xprop -root _NET_WORKAREA 2>/dev/null)"
+t "xrandr $(xrandr 2>/dev/null | head -2 | tr '\n' ' ')"
+t "keyboard $(xinput list 2>/dev/null | grep -ci keyboard)"
+t "net $(ip -4 -br addr 2>/dev/null | tr '\n' ';')"
+t "audio $(pactl info 2>/dev/null | head -1)"
+t "disk-free $(df -h / /trifs 2>/dev/null | tr '\n' ';')"
+t "mem $(free -m | awk '/Mem/{print $2" MB total, "$7" MB available"}')"
+t "shell-log-tail $(tail -3 /var/log/trimangees/shell.log 2>/dev/null | tr '\n' '|')"
+if [ -d /home/Adithya ]; then
+  t "home-writable $(sudo -u trimangees sh -c 'echo ok > /home/Adithya/.selftest && cat /home/Adithya/.selftest' 2>&1)"
+fi
+if grep -q 'trimangees.winetest=1' /proc/cmdline; then
+  t "wineboot-start"
+  sudo -u trimangees env HOME=/home/Adithya WINEPREFIX=/home/Adithya/.wine DISPLAY=:0 WINEDEBUG=-all timeout 600 wineboot -u >/tmp/wineboot.log 2>&1
+  t "wineboot-exit $? prefix=$(ls /home/Adithya/.wine 2>/dev/null | tr '\n' ' ')"
+  t "wine-cmd $(sudo -u trimangees env HOME=/home/Adithya WINEPREFIX=/home/Adithya/.wine DISPLAY=:0 WINEDEBUG=-all timeout 120 wine cmd /c 'echo hello-from-windows' 2>&1 | tr -d '\r' | tail -1)"
+fi
+t "end"

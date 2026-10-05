@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TrimangeesOS window manager settings (Openbox).
+     Openbox only draws the frames of OTHER programs (Windows apps, Chrome).
+     The TrimangeesOS desktop is one borderless window kept at the very bottom
+     of the stack, so every program opens on top of it. -->
+<openbox_config xmlns="http://openbox.org/3.4/rc" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <resistance><strength>10</strength><screen_edge_strength>20</screen_edge_strength></resistance>
+  <focus>
+    <focusNew>yes</focusNew>
+    <followMouse>no</followMouse>
+    <focusLast>yes</focusLast>
+    <underMouse>no</underMouse>
+    <focusDelay>200</focusDelay>
+    <raiseOnFocus>no</raiseOnFocus>
+  </focus>
+  <placement><policy>Smart</policy><center>yes</center><monitor>Primary</monitor></placement>
+  <theme>
+    <name>Onyx</name>
+    <titleLayout>NLIMC</titleLayout>
+    <keepBorder>yes</keepBorder>
+    <animateIconify>no</animateIconify>
+    <font place="ActiveWindow"><name>Inter</name><size>10</size><weight>Bold</weight><slant>Normal</slant></font>
+    <font place="InactiveWindow"><name>Inter</name><size>10</size><weight>Bold</weight><slant>Normal</slant></font>
+  </theme>
+  <desktops><number>1</number><firstdesk>1</firstdesk><names><name>TrimangeesOS</name></names><popupTime>0</popupTime></desktops>
+  <resize><drawContents>yes</drawContents><popupShow>Nonpixel</popupShow><popupPosition>Center</popupPosition></resize>
+  <!-- keep the bottom 48 px free for the TrimangeesOS taskbar -->
+  <margins><top>0</top><bottom>48</bottom><left>0</left><right>0</right></margins>
+  <dock><position>Bottom</position><floatingX>0</floatingX><floatingY>0</floatingY><noStrut>no</noStrut><stacking>Above</stacking><direction>Vertical</direction><autoHide>no</autoHide></dock>
+  <keyboard>
+    <keybind key="A-F4"><action name="Close"/></keybind>
+    <keybind key="A-Tab"><action name="NextWindow"><finalactions><action name="Focus"/><action name="Raise"/><action name="Unshade"/></finalactions></action></keybind>
+    <keybind key="A-S-Tab"><action name="PreviousWindow"><finalactions><action name="Focus"/><action name="Raise"/><action name="Unshade"/></finalactions></action></keybind>
+    <keybind key="A-space"><action name="ShowMenu"><menu>client-menu</menu></action></keybind>
+    <keybind key="W-Up"><action name="Maximize"/></keybind>
+    <keybind key="W-Down"><action name="Iconify"/></keybind>
+  </keyboard>
+  <mouse>
+    <context name="Frame">
+      <mousebind button="A-Left" action="Press"><action name="Focus"/><action name="Raise"/></mousebind>
+      <mousebind button="A-Left" action="Drag"><action name="Move"/></mousebind>
+      <mousebind button="A-Right" action="Drag"><action name="Resize"/></mousebind>
+    </context>
+    <context name="Titlebar">
+      <mousebind button="Left" action="Press"><action name="Focus"/><action name="Raise"/></mousebind>
+      <mousebind button="Left" action="Drag"><action name="Move"/></mousebind>
+      <mousebind button="Left" action="DoubleClick"><action name="ToggleMaximize"/></mousebind>
+      <mousebind button="Right" action="Press"><action name="Focus"/><action name="Raise"/><action name="ShowMenu"><menu>client-menu</menu></action></mousebind>
+    </context>
+    <context name="Top"><mousebind button="Left" action="Drag"><action name="Resize"><edge>top</edge></action></mousebind></context>
+    <context name="Left"><mousebind button="Left" action="Drag"><action name="Resize"><edge>left</edge></action></mousebind></context>
+    <context name="Right"><mousebind button="Left" action="Drag"><action name="Resize"><edge>right</edge></action></mousebind></context>
+    <context name="Bottom"><mousebind button="Left" action="Drag"><action name="Resize"><edge>bottom</edge></action></mousebind></context>
+    <context name="BLCorner"><mousebind button="Left" action="Drag"><action name="Resize"/></mousebind></context>
+    <context name="BRCorner"><mousebind button="Left" action="Drag"><action name="Resize"/></mousebind></context>
+    <context name="TLCorner"><mousebind button="Left" action="Drag"><action name="Resize"/></mousebind></context>
+    <context name="TRCorner"><mousebind button="Left" action="Drag"><action name="Resize"/></mousebind></context>
+    <context name="Client"><mousebind button="Left" action="Press"><action name="Focus"/><action name="Raise"/></mousebind></context>
+    <context name="Icon"><mousebind button="Left" action="Press"><action name="ShowMenu"><menu>client-menu</menu></action></mousebind></context>
+    <context name="AllDesktops"><mousebind button="Left" action="Press"><action name="ToggleOmnipresent"/></mousebind></context>
+    <context name="Shade"><mousebind button="Left" action="Press"><action name="ToggleShade"/></mousebind></context>
+    <context name="Iconify"><mousebind button="Left" action="Press"><action name="Iconify"/></mousebind></context>
+    <context name="Maximize"><mousebind button="Left" action="Press"><action name="ToggleMaximize"/></mousebind></context>
+    <context name="Close"><mousebind button="Left" action="Press"><action name="Close"/></mousebind></context>
+  </mouse>
+  <applications>
+    <!-- The TrimangeesOS desktop: no frame, always at the bottom, not in any task list -->
+    <application title="TrimangeesOS Shell">
+      <decor>no</decor>
+      <layer>below</layer>
+      <focus>yes</focus>
+      <skip_taskbar>yes</skip_taskbar>
+      <skip_pager>yes</skip_pager>
+      <maximized>no</maximized>
+      <position force="yes"><x>0</x><y>0</y></position>
+    </application>
+    <!-- The Trimangees Browser window is frameless (it draws its own title bar) -->
+    <application title="Trimangees Browser"><decor>no</decor></application>
+  </applications>
+</openbox_config>

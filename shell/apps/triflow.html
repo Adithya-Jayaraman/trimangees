@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TriFlow</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg:#0e1015; --surface:#161922; --surface2:#1e222d; --border:#272b38;
+    --text:#e9ebf1; --dim:#868ca0; --dimmer:#565c6f;
+    --accent:#5ee6c7; --accent-soft:rgba(94,230,199,.14);
+    --link:#8b93ff; --danger:#ff6b7a; --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    height:100vh;overflow:hidden;font-size:14px;}
+  button, select, input{font-family:inherit;font-size:13px;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ---------- Login screen ---------- */
+  #loginScreen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:50;}
+  #loginBox{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:36px 40px;text-align:center;min-width:320px;}
+  #loginBox h1{font-size:20px;margin:0 0 4px;}
+  #loginBox h1 span{color:var(--accent);}
+  #loginBox .sub{color:var(--dimmer);font-size:13px;margin-bottom:22px;}
+  .accountRow{display:flex;gap:12px;justify-content:center;margin-bottom:8px;}
+  .accountBtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:14px 22px;border-radius:10px;cursor:pointer;font-size:14px;min-width:90px;}
+  .accountBtn:hover{border-color:var(--accent);color:var(--accent);}
+
+  /* ---------- Top bar ---------- */
+  #topbar{display:flex;align-items:center;gap:14px;padding:10px 18px;background:var(--surface);
+    border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .brand{font-size:16px;font-weight:600;white-space:nowrap;}
+  .brand span{color:var(--accent);}
+  #diagramName{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:6px 10px;border-radius:6px;min-width:160px;}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:7px 13px;border-radius:6px;cursor:pointer;white-space:nowrap;}
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .btn.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .btn.danger{color:var(--danger);border-color:var(--danger);}
+  #saveState{font-size:12px;color:var(--dimmer);}
+  #accountBadge{font-size:12px;color:var(--dim);padding:4px 10px;background:var(--surface2);border-radius:20px;}
+
+  /* ---------- Layout ---------- */
+  #body{flex:1;display:flex;overflow:hidden;}
+  #sidebar{width:200px;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;}
+  #sidebar h2{font-size:12px;color:var(--dimmer);margin:14px 14px 6px;text-transform:none;}
+  #diagramList{flex:1;overflow:auto;padding:0 8px;}
+  .diagItem{display:flex;align-items:center;gap:6px;padding:8px 8px;border-radius:6px;cursor:pointer;font-size:13px;}
+  .diagItem:hover{background:var(--surface2);}
+  .diagItem.active{background:var(--accent-soft);color:var(--accent);}
+  .diagItem span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .diagItem .x{color:var(--dimmer);padding:2px 4px;}
+  .diagItem .x:hover{color:var(--danger);}
+  #newDiagramBtn{margin:10px 14px;}
+
+  #toolbar{width:56px;background:var(--surface);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:6px;}
+  .tool{width:38px;height:38px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);
+    color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .tool:hover{border-color:var(--accent);}
+  .tool.active{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .toolSep{width:28px;height:1px;background:var(--border);margin:4px 0;}
+  .swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;}
+  .swatch.active{border-color:var(--text);}
+
+  #canvasWrap{flex:1;overflow:auto;background:
+    linear-gradient(var(--bg) 0, var(--bg) 100%),
+    repeating-linear-gradient(0deg, transparent 0 23px, var(--surface2) 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, var(--surface2) 23px 24px);
+  }
+  #canvas{display:block;cursor:crosshair;}
+  .shape-label{font-family:inherit;font-size:13px;color:var(--text);pointer-events:none;user-select:none;}
+  #textEditBox{position:absolute;background:var(--surface);border:1px solid var(--accent);border-radius:4px;
+    color:var(--text);font-size:13px;padding:4px 6px;resize:none;outline:none;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="loginScreen">
+    <div id="loginBox">
+      <h1>Tri<span>Flow</span></h1>
+      <div class="sub">Pick your account to open your diagrams</div>
+      <div class="accountRow">
+        <button class="accountBtn" data-account="adithya">Adithya</button>
+        <button class="accountBtn" data-account="tarun">Tarun</button>
+        <button class="accountBtn" data-account="arjun">Arjun</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="topbar" style="display:none;">
+    <div class="brand">Tri<span>Flow</span></div>
+    <input id="diagramName" value="Untitled diagram">
+    <span id="saveState">not saved yet</span>
+    <div style="flex:1;"></div>
+    <button id="btnExport" class="btn">Export PNG</button>
+    <span id="accountBadge">—</span>
+    <button id="btnSwitchAccount" class="btn">Switch Account</button>
+  </div>
+
+  <div id="body" style="display:none;">
+    <div id="sidebar">
+      <h2>Diagrams</h2>
+      <button id="newDiagramBtn" class="btn primary">+ New Diagram</button>
+      <div id="diagramList"></div>
+    </div>
+
+    <div id="toolbar">
+      <div class="tool active" data-tool="select" title="Select">↖</div>
+      <div class="toolSep"></div>
+      <div class="tool" data-tool="rect" title="Rectangle">▭</div>
+      <div class="tool" data-tool="ellipse" title="Ellipse">◯</div>
+      <div class="tool" data-tool="diamond" title="Diamond">◆</div>
+      <div class="tool" data-tool="text" title="Text label">T</div>
+      <div class="toolSep"></div>
+      <div class="tool" data-tool="connector" title="Connector">↗</div>
+      <div class="toolSep"></div>
+      <div class="tool" data-tool="delete" title="Delete selected">✕</div>
+      <div class="toolSep"></div>
+      <div class="swatch active" style="background:#5ee6c7;" data-color="#5ee6c7"></div>
+      <div class="swatch" style="background:#8b93ff;" data-color="#8b93ff"></div>
+      <div class="swatch" style="background:#f0c674;" data-color="#f0c674"></div>
+      <div class="swatch" style="background:#ff6b7a;" data-color="#ff6b7a"></div>
+      <div class="swatch" style="background:#8b8f9c;" data-color="#8b8f9c"></div>
+    </div>
+
+    <div id="canvasWrap">
+      <svg id="canvas" width="2000" height="1300"></svg>
+    </div>
+  </div>
+</div>
+
+<script>
+const FIREBASE_HOST = 'mysterysolver-trimangees-default-rtdb.firebaseio.com';
+firebase.initializeApp({ databaseURL: 'https://' + FIREBASE_HOST });
+const db = firebase.database();
+
+const el = id => document.getElementById(id);
+const svgNS = 'http://www.w3.org/2000/svg';
+
+let account = null;
+let diagrams = {};        // id -> {name, shapes, connectors}
+let currentDiagramId = null;
+let shapes = [];          // current diagram's shapes
+let connectors = [];      // current diagram's connectors
+let tool = 'select';
+let currentColor = '#5ee6c7';
+let selectedId = null;
+let selectedType = null;  // 'shape' | 'connector'
+let connectorFrom = null;
+let dragState = null;
+let saveTimer = null;
+let nextId = 1;
+
+function uid(){ return 's' + (nextId++) + '_' + Date.now().toString(36); }
+
+// ---------- Login ----------
+document.querySelectorAll('.accountBtn').forEach(btn => {
+  btn.onclick = () => {
+    account = btn.dataset.account;
+    el('loginScreen').style.display = 'none';
+    el('topbar').style.display = 'flex';
+    el('body').style.display = 'flex';
+    el('accountBadge').textContent = account.charAt(0).toUpperCase() + account.slice(1);
+    loadDiagramList();
+  };
+});
+el('btnSwitchAccount').onclick = () => {
+  if(saveTimer) clearTimeout(saveTimer);
+  account = null; currentDiagramId = null; shapes = []; connectors = [];
+  el('loginScreen').style.display = 'flex';
+  el('topbar').style.display = 'none';
+  el('body').style.display = 'none';
+};
+
+// ---------- Diagram list ----------
+function diagramsRef(){ return db.ref('triflow/' + account + '/diagrams'); }
+
+function loadDiagramList(){
+  diagramsRef().once('value').then(snap => {
+    diagrams = snap.val() || {};
+    renderDiagramList();
+    const ids = Object.keys(diagrams);
+    if(ids.length){
+      openDiagram(ids[0]);
+    } else {
+      newDiagram();
+    }
+  });
+}
+
+function renderDiagramList(){
+  const list = el('diagramList');
+  list.innerHTML = '';
+  Object.keys(diagrams).forEach(id => {
+    const d = diagrams[id];
+    const row = document.createElement('div');
+    row.className = 'diagItem' + (id === currentDiagramId ? ' active' : '');
+    row.innerHTML = '<span>' + (d.name || 'Untitled') + '</span><span class="x">✕</span>';
+    row.querySelector('span').onclick = () => openDiagram(id);
+    row.querySelector('.x').onclick = (e) => {
+      e.stopPropagation();
+      if(!confirm('Delete "' + (d.name || 'Untitled') + '"?')) return;
+      diagramsRef().child(id).remove().then(() => {
+        delete diagrams[id];
+        if(id === currentDiagramId){
+          const remaining = Object.keys(diagrams);
+          if(remaining.length) openDiagram(remaining[0]); else newDiagram();
+        }
+        renderDiagramList();
+      });
+    };
+    list.appendChild(row);
+  });
+}
+
+function newDiagram(){
+  const ref = diagramsRef().push();
+  const data = { name: 'Untitled diagram', shapes: {}, connectors: {}, updatedAt: Date.now() };
+  ref.set(data).then(() => {
+    diagrams[ref.key] = data;
+    openDiagram(ref.key);
+    renderDiagramList();
+  });
+}
+el('newDiagramBtn').onclick = newDiagram;
+
+function openDiagram(id){
+  currentDiagramId = id;
+  const d = diagrams[id] || { name: 'Untitled diagram', shapes: {}, connectors: {} };
+  el('diagramName').value = d.name || 'Untitled diagram';
+  shapes = Object.keys(d.shapes || {}).map(k => ({ id: k, ...d.shapes[k] }));
+  connectors = Object.keys(d.connectors || {}).map(k => ({ id: k, ...d.connectors[k] }));
+  selectedId = null; selectedType = null;
+  renderDiagramList();
+  renderCanvas();
+}
+
+el('diagramName').addEventListener('input', () => {
+  if(!currentDiagramId) return;
+  diagrams[currentDiagramId] = diagrams[currentDiagramId] || {};
+  diagrams[currentDiagramId].name = el('diagramName').value;
+  renderDiagramList();
+  scheduleSave();
+});
+
+function scheduleSave(){
+  el('saveState').textContent = 'saving...';
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(doSave, 500);
+}
+
+function doSave(){
+  if(!currentDiagramId) return;
+  const shapesObj = {}; shapes.forEach(s => { const {id, ...rest} = s; shapesObj[id] = rest; });
+  const connObj = {}; connectors.forEach(c => { const {id, ...rest} = c; connObj[id] = rest; });
+  const data = { name: el('diagramName').value || 'Untitled diagram', shapes: shapesObj, connectors: connObj, updatedAt: Date.now() };
+  diagramsRef().child(currentDiagramId).set(data).then(() => {
+    diagrams[currentDiagramId] = data;
+    el('saveState').textContent = 'saved';
+  }).catch(e => { el('saveState').textContent = 'save failed: ' + e.message; });
+}
+
+// ---------- Toolbar ----------
+document.querySelectorAll('.tool').forEach(t => {
+  t.onclick = () => {
+    if(t.dataset.tool === 'delete'){ deleteSelected(); return; }
+    document.querySelectorAll('.tool').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    tool = t.dataset.tool;
+    connectorFrom = null;
+  };
+});
+document.querySelectorAll('.swatch').forEach(s => {
+  s.onclick = () => {
+    document.querySelectorAll('.swatch').forEach(x => x.classList.remove('active'));
+    s.classList.add('active');
+    currentColor = s.dataset.color;
+    if(selectedType === 'shape'){
+      const sh = shapes.find(x => x.id === selectedId);
+      if(sh){ sh.color = currentColor; renderCanvas(); scheduleSave(); }
+    }
+  };
+});
+
+function deleteSelected(){
+  if(!selectedId) return;
+  if(selectedType === 'shape'){
+    shapes = shapes.filter(s => s.id !== selectedId);
+    connectors = connectors.filter(c => c.from !== selectedId && c.to !== selectedId);
+  } else if(selectedType === 'connector'){
+    connectors = connectors.filter(c => c.id !== selectedId);
+  }
+  selectedId = null; selectedType = null;
+  renderCanvas();
+  scheduleSave();
+}
+document.addEventListener('keydown', (e) => {
+  if((e.key === 'Delete' || e.key === 'Backspace') && selectedId && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA'){
+    deleteSelected();
+  }
+});
+
+// ---------- Geometry ----------
+function edgePoint(shape, dirX, dirY){
+  const cx = shape.x + shape.w/2, cy = shape.y + shape.h/2;
+  const hw = Math.max(shape.w/2, 1), hh = Math.max(shape.h/2, 1);
+  if(dirX === 0 && dirY === 0) return {x:cx, y:cy};
+  if(shape.type === 'ellipse'){
+    const len = Math.sqrt((dirX*dirX)/(hw*hw) + (dirY*dirY)/(hh*hh)) || 1;
+    return { x: cx + dirX/len, y: cy + dirY/len };
+  }
+  if(shape.type === 'diamond'){
+    const scale = 1 / ((Math.abs(dirX)/hw) + (Math.abs(dirY)/hh) || 1);
+    return { x: cx + dirX*scale, y: cy + dirY*scale };
+  }
+  const scaleX = dirX !== 0 ? hw/Math.abs(dirX) : Infinity;
+  const scaleY = dirY !== 0 ? hh/Math.abs(dirY) : Infinity;
+  const scale = Math.min(scaleX, scaleY);
+  return { x: cx + dirX*scale, y: cy + dirY*scale };
+}
+
+function shapeCenter(s){ return { x: s.x + s.w/2, y: s.y + s.h/2 }; }
+
+// ---------- Canvas rendering ----------
+const canvas = el('canvas');
+
+function renderCanvas(){
+  canvas.innerHTML = '';
+  // arrowhead marker def
+  const defs = document.createElementNS(svgNS, 'defs');
+  defs.innerHTML = '<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">' +
+    '<path d="M 0 0 L 10 5 L 0 10 z" fill="#868ca0"></path></marker>';
+  canvas.appendChild(defs);
+
+  connectors.forEach(c => drawConnector(c));
+  shapes.forEach(s => drawShape(s));
+}
+
+function drawShape(s){
+  const g = document.createElementNS(svgNS, 'g');
+  g.dataset.id = s.id;
+  g.style.cursor = 'move';
+
+  let shapeEl;
+  if(s.type === 'ellipse'){
+    shapeEl = document.createElementNS(svgNS, 'ellipse');
+    shapeEl.setAttribute('cx', s.x + s.w/2);
+    shapeEl.setAttribute('cy', s.y + s.h/2);
+    shapeEl.setAttribute('rx', s.w/2);
+    shapeEl.setAttribute('ry', s.h/2);
+  } else if(s.type === 'diamond'){
+    shapeEl = document.createElementNS(svgNS, 'polygon');
+    const cx = s.x + s.w/2, cy = s.y + s.h/2;
+    shapeEl.setAttribute('points', [
+      [cx, s.y], [s.x + s.w, cy], [cx, s.y + s.h], [s.x, cy]
+    ].map(p => p.join(',')).join(' '));
+  } else if(s.type === 'text'){
+    shapeEl = document.createElementNS(svgNS, 'rect');
+    shapeEl.setAttribute('x', s.x); shapeEl.setAttribute('y', s.y);
+    shapeEl.setAttribute('width', s.w); shapeEl.setAttribute('height', s.h);
+    shapeEl.setAttribute('fill', 'transparent');
+    shapeEl.setAttribute('stroke', 'transparent');
+  } else {
+    shapeEl = document.createElementNS(svgNS, 'rect');
+    shapeEl.setAttribute('x', s.x); shapeEl.setAttribute('y', s.y);
+    shapeEl.setAttribute('width', s.w); shapeEl.setAttribute('height', s.h);
+    shapeEl.setAttribute('rx', 6);
+  }
+  if(s.type !== 'text'){
+    shapeEl.setAttribute('fill', hexToRgba(s.color || '#5ee6c7', 0.16));
+    shapeEl.setAttribute('stroke', s.color || '#5ee6c7');
+    shapeEl.setAttribute('stroke-width', s.id === selectedId ? 2.5 : 1.5);
+  }
+  g.appendChild(shapeEl);
+
+  const fo = document.createElementNS(svgNS, 'foreignObject');
+  fo.setAttribute('x', s.x); fo.setAttribute('y', s.y);
+  fo.setAttribute('width', s.w); fo.setAttribute('height', s.h);
+  fo.style.pointerEvents = 'none';
+  const div = document.createElement('div');
+  div.className = 'shape-label';
+  div.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:4px;overflow:hidden;color:' + (s.type === 'text' ? (s.color || '#e9ebf1') : '#e9ebf1') + ';font-weight:' + (s.type==='text' ? '600':'400') + ';';
+  div.textContent = s.text || '';
+  fo.appendChild(div);
+  g.appendChild(fo);
+
+  if(s.id === selectedId && selectedType === 'shape'){
+    [[s.x,s.y],[s.x+s.w,s.y],[s.x,s.y+s.h],[s.x+s.w,s.y+s.h]].forEach(([hx,hy],i) => {
+      const handle = document.createElementNS(svgNS,'rect');
+      handle.setAttribute('x', hx-4); handle.setAttribute('y', hy-4);
+      handle.setAttribute('width', 8); handle.setAttribute('height', 8);
+      handle.setAttribute('fill', '#5ee6c7');
+      handle.dataset.handle = i;
+      handle.style.cursor = 'nwse-resize';
+      g.appendChild(handle);
+    });
+  }
+
+  g.addEventListener('mousedown', (e) => onShapeMouseDown(e, s));
+  g.addEventListener('dblclick', (e) => { e.stopPropagation(); editShapeText(s); });
+  canvas.appendChild(g);
+}
+
+function hexToRgba(hex, a){
+  const n = parseInt(hex.replace('#',''), 16);
+  return 'rgba(' + [(n>>16)&255,(n>>8)&255,n&255].join(',') + ',' + a + ')';
+}
+
+function drawConnector(c){
+  const from = shapes.find(s => s.id === c.from);
+  const to = shapes.find(s => s.id === c.to);
+  if(!from || !to) return;
+  const c1 = shapeCenter(from), c2 = shapeCenter(to);
+  const p1 = edgePoint(from, c2.x - c1.x, c2.y - c1.y);
+  const p2 = edgePoint(to, c1.x - c2.x, c1.y - c2.y);
+  const line = document.createElementNS(svgNS, 'line');
+  line.setAttribute('x1', p1.x); line.setAttribute('y1', p1.y);
+  line.setAttribute('x2', p2.x); line.setAttribute('y2', p2.y);
+  line.setAttribute('stroke', c.id === selectedId ? '#5ee6c7' : '#868ca0');
+  line.setAttribute('stroke-width', c.id === selectedId ? 2.5 : 1.5);
+  line.setAttribute('marker-end', 'url(#arrow)');
+  line.style.cursor = 'pointer';
+  line.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    selectedId = c.id; selectedType = 'connector';
+    renderCanvas();
+  });
+  canvas.appendChild(line);
+}
+
+function editShapeText(s){
+  const wrap = el('canvasWrap');
+  const box = document.createElement('textarea');
+  box.id = 'textEditBox';
+  box.value = s.text || '';
+  const rect = canvas.getBoundingClientRect();
+  box.style.left = (rect.left + s.x - wrap.scrollLeft + window.scrollX) + 'px';
+  box.style.top = (rect.top + s.y - wrap.scrollTop + window.scrollY) + 'px';
+  box.style.width = s.w + 'px';
+  box.style.height = s.h + 'px';
+  document.body.appendChild(box);
+  box.focus(); box.select();
+  function commit(){
+    s.text = box.value;
+    document.body.removeChild(box);
+    renderCanvas();
+    scheduleSave();
+  }
+  box.addEventListener('blur', commit);
+  box.addEventListener('keydown', (e) => { if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); box.blur(); } });
+}
+
+// ---------- Canvas interaction ----------
+function svgPoint(e){
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if(e.target === canvas){
+    const pt = svgPoint(e);
+    if(['rect','ellipse','diamond','text'].includes(tool)){
+      const s = {
+        id: uid(), type: tool,
+        x: pt.x - (tool==='text'?60:50), y: pt.y - (tool==='text'?18:30),
+        w: tool==='text' ? 120 : 100, h: tool==='text' ? 36 : 60,
+        text: tool==='text' ? 'Label' : '', color: currentColor
+      };
+      shapes.push(s);
+      selectedId = s.id; selectedType = 'shape';
+      renderCanvas();
+      scheduleSave();
+      // switch back to select after placing, so user doesn't spam-place shapes
+      document.querySelector('.tool[data-tool=select]').click();
+    } else {
+      selectedId = null; selectedType = null;
+      renderCanvas();
+    }
+  }
+});
+
+function onShapeMouseDown(e, s){
+  e.stopPropagation();
+  if(tool === 'connector'){
+    if(!connectorFrom){
+      connectorFrom = s.id;
+    } else if(connectorFrom !== s.id){
+      const c = { id: uid(), from: connectorFrom, to: s.id };
+      connectors.push(c);
+      connectorFrom = null;
+      renderCanvas();
+      scheduleSave();
+    }
+    return;
+  }
+  selectedId = s.id; selectedType = 'shape';
+  renderCanvas();
+
+  const handleIdx = e.target.dataset.handle;
+  const start = svgPoint(e);
+  const orig = { x: s.x, y: s.y, w: s.w, h: s.h };
+
+  if(handleIdx !== undefined){
+    dragState = { mode: 'resize', shape: s, handleIdx: +handleIdx, start, orig };
+  } else {
+    dragState = { mode: 'move', shape: s, start, orig };
+  }
+}
+
+document.addEventListener('mousemove', (e) => {
+  if(!dragState) return;
+  const pt = svgPoint(e);
+  const dx = pt.x - dragState.start.x, dy = pt.y - dragState.start.y;
+  const s = dragState.shape;
+  if(dragState.mode === 'move'){
+    s.x = dragState.orig.x + dx;
+    s.y = dragState.orig.y + dy;
+  } else if(dragState.mode === 'resize'){
+    const o = dragState.orig;
+    if(dragState.handleIdx === 0){ s.x = o.x+dx; s.y = o.y+dy; s.w = o.w-dx; s.h = o.h-dy; }
+    if(dragState.handleIdx === 1){ s.y = o.y+dy; s.w = o.w+dx; s.h = o.h-dy; }
+    if(dragState.handleIdx === 2){ s.x = o.x+dx; s.w = o.w-dx; s.h = o.h+dy; }
+    if(dragState.handleIdx === 3){ s.w = o.w+dx; s.h = o.h+dy; }
+    s.w = Math.max(s.w, 24); s.h = Math.max(s.h, 20);
+  }
+  renderCanvas();
+});
+document.addEventListener('mouseup', () => {
+  if(dragState){ dragState = null; scheduleSave(); }
+});
+
+// ---------- Export PNG ----------
+el('btnExport').onclick = () => {
+  const clone = canvas.cloneNode(true);
+  clone.querySelectorAll('foreignObject div').forEach(d => d.style.pointerEvents = 'none');
+  const xml = new XMLSerializer().serializeToString(clone);
+  const svgBlob = new Blob([xml], {type: 'image/svg+xml;charset=utf-8'});
+  const url = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = canvas.width.baseVal.value;
+    c.height = canvas.height.baseVal.value;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#0e1015';
+    ctx.fillRect(0,0,c.width,c.height);
+    ctx.drawImage(img, 0, 0);
+    URL.revokeObjectURL(url);
+    const a = document.createElement('a');
+    a.href = c.toDataURL('image/png');
+    a.download = (el('diagramName').value || 'diagram') + '.png';
+    a.click();
+  };
+  img.src = url;
+};
+</script>
+</body>
+</html>

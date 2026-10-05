@@ -1,0 +1,57 @@
+name: Build TrimangeesOS ISO
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['shell/**', 'system/**', 'build/**', '.github/workflows/**']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin grub-common mtools rsync
+
+      - name: Build ISO
+        run: sudo WORK=/mnt/trios OUT=$PWD/out ./build/build-iso.sh
+
+      - name: Boot test in QEMU (best effort)
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y qemu-system-x86 ovmf
+          ISO=out/TrimangeesOS.iso
+          if [ ! -f "$ISO" ]; then cat out/TrimangeesOS.iso.part* > /tmp/joined.iso; ISO=/tmp/joined.iso; fi
+          qemu-img create -f qcow2 /tmp/trifs.qcow2 4G
+          timeout 900 qemu-system-x86_64 -m 3072 -smp 2 -cdrom "$ISO" -hda /tmp/trifs.qcow2 -boot d \
+            -display none -serial file:out/serial.log -monitor none \
+            || true
+          grep -a "TRIMANGEES_SHELL_READY" out/serial.log && echo BOOT_OK || echo "no ready marker (TCG is slow; check serial.log)"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="build-$(date +%Y%m%d-%H%M)"
+          gh release create "$TAG" --title "TrimangeesOS $TAG" --notes "Download the ISO file(s) below." \
+            out/TrimangeesOS.iso* out/serial.log 2>/dev/null || \
+          gh release create "$TAG" --title "TrimangeesOS $TAG" --notes "Download the ISO file(s) below." out/TrimangeesOS.iso*
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs
+          path: out/*.log
+          if-no-files-found: ignore

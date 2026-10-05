@@ -1,0 +1,28 @@
+#!/bin/bash
+# Starts the window manager and keeps the TrimangeesOS shell running.
+LOG=/var/log/trimangees/shell.log
+exec >>"$LOG" 2>&1
+echo "=== desktop start $(date) ==="
+
+# Window manager: frames Windows programs and Chrome; the shell sits underneath them.
+openbox --config-file /etc/xdg/openbox/rc.xml &
+
+# Sound server (Wine and Chrome both use PulseAudio)
+pulseaudio --start --exit-idle-time=-1 --log-target=syslog 2>/dev/null
+
+# VirtualBox: shared clipboard, auto-resize, seamless mouse
+if command -v VBoxClient-all >/dev/null 2>&1; then VBoxClient-all & fi
+
+export TRIMANGEES_SESSION=1
+export ELECTRON_OZONE_PLATFORM_HINT=x11
+export ELECTRON_DISABLE_SECURITY_WARNINGS=1
+export ELECTRON_ENABLE_LOGGING=1
+
+# Keep the shell alive: if it quits (drive set-up restart, or a crash) start it again.
+while true; do
+  /opt/trimangees/electron/electron /opt/trimangees/shell --no-sandbox --class=trimangees-os
+  code=$?
+  echo "shell exited with code $code at $(date)"
+  [ -e /run/trimangees/stop ] && break
+  sleep 1
+done

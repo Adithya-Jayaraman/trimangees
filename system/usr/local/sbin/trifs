@@ -1,0 +1,318 @@
+#!/bin/bash
+# ============================================================
+# trifs — TrimangeesOS data-drive manager (runs as root via sudo)
+#
+# TriFS is the real filesystem of the OS. It lives on:
+#   (a) a disk/partition whose label is TRIFS   (ext4), or
+#   (b) a file called TriFS.img in the top folder of any other drive
+#       (NTFS / exFAT / ext4) — e.g. the TRIMANGEES external drive.
+#
+#   trifs status            what is mounted right now          (JSON)
+#   trifs scan              blank disks + drives that can host (JSON)
+#   trifs mount             find a TriFS and mount it          (JSON)
+#   trifs format DISK       blank disk -> new TriFS            (JSON)
+#   trifs create-img PART GB   make TriFS.img on a drive       (JSON)
+#   trifs unmount           flush and unmount everything       (JSON)
+#
+# Every command prints exactly one JSON object on stdout.
+# ============================================================
+export LC_ALL=C
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+TRI_USER="${TRIFS_USER:-trimangees}"
+MNT="${TRIFS_MNT:-/trifs}"                 # where TriFS is mounted
+HOSTS="${TRIFS_HOSTS:-/mnt/host}"          # where other drives get mounted
+STATE_DIR="${TRIFS_STATE:-/run/trifs}"
+STATE="$STATE_DIR/state.json"
+LOG="${TRIFS_LOG:-/var/log/trifs.log}"
+LABEL="TRIFS"
+IMG_NAME="TriFS.img"
+ACCOUNTS="${TRIFS_ACCOUNTS:-Adithya Tarun Arjun}"
+BIND_HOME="${TRIFS_BIND_HOME-/home}"        # /trifs/home is bind-mounted here (set empty = don't)
+
+mkdir -p "$STATE_DIR" 2>/dev/null
+log() { echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; }
+
+fail() {                                   # fail "message"  -> JSON + exit 1
+  log "ERROR: $*"
+  jq -nc --arg e "$*" '{ok:false,error:$e}'
+  exit 1
+}
+
+# ── which disk is the live medium (never touch it) ───────────
+live_disk() {
+  local src
+  src=$(findmnt -no SOURCE /run/live/medium 2>/dev/null || findmnt -no SOURCE /lib/live/mount/medium 2>/dev/null)
+  [ -n "$src" ] || return 0
+  local pk
+  pk=$(lsblk -no PKNAME "$src" 2>/dev/null | head -1)
+  [ -n "$pk" ] && echo "/dev/$pk" || echo "$src"
+}
+
+is_mounted() { mountpoint -q "$1" 2>/dev/null; }
+
+# ── JSON of the current mount ────────────────────────────────
+status_json() {
+  if is_mounted "$MNT"; then
+    local total free src mode dev img
+    read -r total free < <(df -B1 --output=size,avail "$MNT" | tail -1)
+    src=$(findmnt -no SOURCE "$MNT")
+    mode="partition"; dev="$src"; img=""
+    if [ -f "$STATE" ]; then
+      mode=$(jq -r '.mode // "partition"' "$STATE")
+      dev=$(jq -r '.device // empty' "$STATE"); [ -n "$dev" ] || dev="$src"
+      img=$(jq -r '.image // empty' "$STATE")
+    fi
+    jq -nc --arg mode "$mode" --arg dev "$dev" --arg img "$img" --arg root "$MNT" \
+       --argjson total "${total:-0}" --argjson free "${free:-0}" \
+       '{ok:true,mounted:true,mode:$mode,device:$dev,image:$img,root:$root,total:$total,free:$free,used:($total-$free)}'
+  else
+    jq -nc --arg root "$MNT" '{ok:true,mounted:false,mode:"none",root:$root}'
+  fi
+}
+
+# ── make the folder layout and hand it to the desktop user ───
+prepare_layout() {
+  local u
+  mkdir -p "$MNT/home" "$MNT/Applications" "$MNT/shared" "$MNT/system"
+  for u in $ACCOUNTS; do mkdir -p "$MNT/home/$u"; done
+  chown "$TRI_USER:$TRI_USER" "$MNT" "$MNT/home" "$MNT/Applications" "$MNT/shared" "$MNT/system" 2>/dev/null
+  for u in $ACCOUNTS; do chown "$TRI_USER:$TRI_USER" "$MNT/home/$u" 2>/dev/null; done
+  if [ -n "$BIND_HOME" ] && [ -d "$BIND_HOME" ] && ! mountpoint -q "$BIND_HOME" 2>/dev/null; then
+    mount --bind "$MNT/home" "$BIND_HOME" 2>>"$LOG" || log "bind mount of home failed"
+  fi
+}
+
+write_state() {   # write_state mode device image
+  jq -nc --arg m "$1" --arg d "$2" --arg i "${3:-}" '{mode:$m,device:$d,image:$i}' > "$STATE"
+}
+
+# ── mount a block device (must be ext4) at /trifs ────────────
+mount_trifs_dev() {
+  local dev="$1"
+  mkdir -p "$MNT"
+  e2fsck -p "$dev" >>"$LOG" 2>&1          # quietly repair a dirty shutdown
+  mount -t ext4 -o defaults,noatime "$dev" "$MNT" 2>>"$LOG" || return 1
+  write_state partition "$dev" ""
+  prepare_layout
+  log "mounted TriFS from $dev"
+  return 0
+}
+
+# ── mount an arbitrary drive at $HOSTS/<name> ───────────────
+host_mount() {   # host_mount DEV [ro|rw]  -> prints the mountpoint
+  local dev="$1" mode="${2:-rw}" name mp fst
+  name=$(basename "$dev")
+  mp="$HOSTS/$name"
+  fst=$(blkid -o value -s TYPE "$dev" 2>/dev/null)
+  if is_mounted "$mp"; then
+    mount -o "remount,$mode" "$mp" 2>/dev/null
+    echo "$mp"; return 0
+  fi
+  mkdir -p "$mp"
+  local uid gid; uid=$(id -u "$TRI_USER" 2>/dev/null || echo 1000); gid=$(id -g "$TRI_USER" 2>/dev/null || echo 1000)
+  case "$fst" in
+    ntfs)  mount -t ntfs-3g -o "$mode,noatime,uid=$uid,gid=$gid,windows_names" "$dev" "$mp" 2>>"$LOG" \
+             || mount -t ntfs3 -o "$mode,noatime,uid=$uid,gid=$gid" "$dev" "$mp" 2>>"$LOG" ;;
+    exfat) mount -t exfat -o "$mode,noatime,uid=$uid,gid=$gid,umask=0022" "$dev" "$mp" 2>>"$LOG" \
+             || mount -t exfat-fuse -o "$mode,uid=$uid,gid=$gid" "$dev" "$mp" 2>>"$LOG" ;;
+    vfat)  mount -t vfat -o "$mode,noatime,uid=$uid,gid=$gid,umask=0022" "$dev" "$mp" 2>>"$LOG" ;;
+    "")    rmdir "$mp" 2>/dev/null; return 1 ;;
+    *)     mount -t "$fst" -o "$mode,noatime" "$dev" "$mp" 2>>"$LOG" ;;
+  esac || { rmdir "$mp" 2>/dev/null; return 1; }
+  echo "$mp"
+}
+
+# ── list candidate drives ────────────────────────────────────
+# lsblk gives the structure (which devices have no children); blkid -p
+# probes the real filesystem type, so this works with or without udev.
+probe() { blkid -p -o value -s "$2" "$1" 2>/dev/null | head -1; }     # probe DEV TYPE|LABEL
+
+# one line per leaf device: dev|type|size|pkname|mountpoint|model|ro
+leaf_devices() {
+  lsblk -J -b -p -o NAME,TYPE,SIZE,PKNAME,MOUNTPOINT,MODEL,RO 2>/dev/null | jq -r '
+    [ .. | objects | select(has("type")) | select((.children // []) | length == 0) ]
+    | .[] | [.name, .type, (.size|tostring), (.pkname // ""), (.mountpoint // ""),
+             ((.model // "disk") | gsub("[|]";" ")), ((.ro // false)|tostring)] | join("|")'
+}
+
+# Is this leaf device something we may look at?  (never the live medium or the running system)
+usable_leaf() {   # usable_leaf TYPE MOUNTPOINT NAME PKNAME LIVE
+  local type="$1" mp="$2" name="$3" pk="$4" live="$5"
+  case "$type" in disk|part) ;; loop) [ "${TRIFS_ALLOW_LOOP:-0}" = 1 ] || return 1 ;; *) return 1 ;; esac
+  [ -n "$live" ] && { [ "$name" = "$live" ] || [ "$pk" = "$live" ]; } && return 1
+  case "$mp" in /|/boot|/boot/efi|/run/live/*|/lib/live/*|/usr|/var|"[SWAP]") return 1 ;; esac
+  return 0
+}
+
+cmd_scan() {
+  local live blank="[]" hosts="[]" found="[]"
+  live=$(live_disk)
+  local dev type size pk mp model ro fst lab free hasimg had hmp
+  while IFS='|' read -r dev type size pk mp model ro; do
+    [ -n "$dev" ] || continue
+    usable_leaf "$type" "$mp" "$dev" "$pk" "$live" || continue
+    fst=$(probe "$dev" TYPE)
+    if [ -z "$fst" ]; then
+      # no filesystem at all: a blank disk (partitions and swap are not blank)
+      case "$type" in disk|loop) ;; *) continue ;; esac
+      [ -z "$mp" ] && [ "$ro" != "true" ] && [ "${size:-0}" -gt 1000000000 ] || continue
+      blank=$(echo "$blank" | jq -c --arg d "$dev" --argjson s "$size" --arg m "$model" '. + [{dev:$d,size:$s,model:$m}]')
+      continue
+    fi
+    lab=$(probe "$dev" LABEL)
+    if [ "$fst" = "ext4" ] && [ "$lab" = "$LABEL" ]; then
+      [ -z "$mp" ] && found=$(echo "$found" | jq -c --arg d "$dev" --argjson s "$size" '. + [{dev:$d,size:$s}]')
+      continue
+    fi
+    case "$fst" in ntfs|exfat|ext4|ext3) ;; *) continue ;; esac
+    hmp="$mp"; had=1
+    if [ -z "$hmp" ]; then
+      hmp=$(host_mount "$dev" ro) || continue
+      had=0
+    fi
+    free=$(df -B1 --output=avail "$hmp" 2>/dev/null | tail -1 | tr -d ' ')
+    hasimg=false; [ -f "$hmp/$IMG_NAME" ] && hasimg=true
+    if [ "$had" = 0 ]; then umount "$hmp" 2>/dev/null; rmdir "$hmp" 2>/dev/null; fi
+    hosts=$(echo "$hosts" | jq -c --arg dev "$dev" --arg lab "$lab" --arg fst "$fst" \
+        --argjson size "${size:-0}" --argjson free "${free:-0}" --argjson img "$hasimg" \
+        '. + [{dev:$dev,label:$lab,fstype:$fst,size:$size,free:$free,hasImage:$img}]')
+  done < <(leaf_devices)
+  jq -nc --argjson b "$blank" --argjson h "$hosts" --argjson f "$found" \
+     '{ok:true,blank:$b,hosts:$h,found:$f}'
+}
+
+# ── find + mount a TriFS automatically ───────────────────────
+cmd_mount() {
+  if is_mounted "$MNT"; then status_json; return 0; fi
+  local live dev type size pk mp model ro fst lab
+  live=$(live_disk)
+  local plain="" imgs=""
+
+  while IFS='|' read -r dev type size pk mp model ro; do
+    [ -n "$dev" ] || continue
+    usable_leaf "$type" "$mp" "$dev" "$pk" "$live" || continue
+    fst=$(probe "$dev" TYPE); [ -n "$fst" ] || continue
+    lab=$(probe "$dev" LABEL)
+    if [ "$fst" = "ext4" ] && [ "$lab" = "$LABEL" ]; then plain="$plain $dev"; continue; fi
+    case "$fst" in ntfs|exfat|ext4|ext3)
+      if [ "$lab" = "TRIMANGEES" ]; then imgs="$dev $imgs"; else imgs="$imgs $dev"; fi ;;
+    esac
+  done < <(leaf_devices)
+
+  # 1. a partition/disk labelled TRIFS
+  for dev in $plain; do
+    if mount_trifs_dev "$dev"; then status_json; return 0; fi
+    log "labelled device $dev would not mount"
+  done
+
+  # 2. a TriFS.img in the top folder of another drive
+  local d hm
+  for d in $imgs; do
+    hm=$(host_mount "$d" rw) || continue
+    if [ -f "$hm/$IMG_NAME" ]; then
+      e2fsck -p -f "$hm/$IMG_NAME" >>"$LOG" 2>&1
+      if mount -t ext4 -o loop,defaults,noatime "$hm/$IMG_NAME" "$MNT" 2>>"$LOG"; then
+        write_state image "$d" "$hm/$IMG_NAME"
+        prepare_layout
+        log "mounted TriFS image $hm/$IMG_NAME"
+        status_json; return 0
+      fi
+    fi
+    mountpoint -q "$hm" && umount "$hm" 2>/dev/null && rmdir "$hm" 2>/dev/null
+  done
+  status_json
+}
+
+# ── turn a BLANK disk into a TriFS ───────────────────────────
+cmd_format() {
+  local disk="$1"
+  [ -b "$disk" ] || fail "$disk is not a disk"
+  is_mounted "$MNT" && fail "TriFS is already mounted"
+  # refuse anything that is not currently listed as blank
+  if ! TRIFS_ALLOW_LOOP="${TRIFS_ALLOW_LOOP:-0}" cmd_scan | jq -e --arg d "$disk" '.blank[] | select(.dev==$d)' >/dev/null; then
+    fail "$disk is not a blank disk, so I will not erase it"
+  fi
+  log "formatting $disk"
+  wipefs -a "$disk" >>"$LOG" 2>&1
+  sgdisk --zap-all "$disk" >>"$LOG" 2>&1
+  sgdisk -n 1:0:0 -t 1:8300 -c 1:TRIFS "$disk" >>"$LOG" 2>&1 || fail "could not partition $disk"
+  partprobe "$disk" >>"$LOG" 2>&1
+  command -v udevadm >/dev/null && udevadm settle --timeout=10 >>"$LOG" 2>&1
+  local part=""
+  for _ in $(seq 1 40); do
+    for cand in "${disk}1" "${disk}p1"; do [ -b "$cand" ] && part="$cand" && break; done
+    [ -n "$part" ] && break
+    partx -a "$disk" >>"$LOG" 2>&1; sleep 0.5
+  done
+  if [ -z "$part" ] && [ "${TRIFS_ALLOW_LOOP:-0}" = 1 ]; then
+    # test rigs (loop devices) sometimes lack partition nodes: use the disk itself
+    part="$disk"
+  fi
+  [ -n "$part" ] || fail "the new partition did not appear"
+  mkfs.ext4 -F -q -L "$LABEL" -E lazy_itable_init=1,lazy_journal_init=1 "$part" >>"$LOG" 2>&1 \
+    || fail "could not create the filesystem"
+  mount_trifs_dev "$part" || fail "formatted, but could not mount"
+  status_json
+}
+
+# ── make TriFS.img on a host drive ───────────────────────────
+cmd_create_img() {
+  local part="$1" gb="$2"
+  [ -b "$part" ] || fail "$part is not a drive"
+  case "$gb" in ''|*[!0-9]*) fail "size must be a whole number of GB";; esac
+  [ "$gb" -ge 2 ] || fail "TriFS needs at least 2 GB"
+  is_mounted "$MNT" && fail "TriFS is already mounted"
+  local fst; fst=$(blkid -o value -s TYPE "$part" 2>/dev/null)
+  [ "$fst" = "vfat" ] && fail "FAT drives cannot hold a file this big. Use NTFS or exFAT."
+  local mp; mp=$(host_mount "$part" rw) || fail "could not open $part for writing"
+  local img="$mp/$IMG_NAME"
+  [ -e "$img" ] && fail "$IMG_NAME already exists on that drive (use Mount instead)"
+  local freeb; freeb=$(df -B1 --output=avail "$mp" | tail -1 | tr -d ' ')
+  local need=$(( gb * 1073741824 + 536870912 ))
+  [ "${freeb:-0}" -ge "$need" ] || { umount "$mp" 2>/dev/null; fail "not enough free space for ${gb} GB on that drive"; }
+  log "creating $img (${gb} GB)"
+  fallocate -l "${gb}G" "$img" 2>>"$LOG" || truncate -s "${gb}G" "$img" 2>>"$LOG" || fail "could not create $IMG_NAME"
+  mkfs.ext4 -F -q -L "$LABEL" -E lazy_itable_init=1,lazy_journal_init=1,nodiscard "$img" >>"$LOG" 2>&1 \
+    || { rm -f "$img"; fail "could not format $IMG_NAME"; }
+  mkdir -p "$MNT"
+  mount -t ext4 -o loop,defaults,noatime "$img" "$MNT" 2>>"$LOG" || fail "created, but could not mount"
+  write_state image "$part" "$img"
+  prepare_layout
+  status_json
+}
+
+cmd_unmount() {
+  sync
+  [ -n "$BIND_HOME" ] && mountpoint -q "$BIND_HOME" 2>/dev/null && { umount "$BIND_HOME" 2>/dev/null || umount -l "$BIND_HOME" 2>/dev/null; }
+  if is_mounted "$MNT"; then umount "$MNT" 2>>"$LOG" || umount -l "$MNT" 2>>"$LOG"; fi
+  local mp
+  for mp in "$HOSTS"/*; do
+    [ -d "$mp" ] && mountpoint -q "$mp" 2>/dev/null && { umount "$mp" 2>/dev/null || umount -l "$mp" 2>/dev/null; }
+  done
+  rm -f "$STATE"
+  log "unmounted"
+  status_json
+}
+
+# Boot-time version: drives (especially USB ones) can appear a few seconds late.
+cmd_mount_wait() {
+  local n out
+  for n in 1 2 3 4 5; do
+    out=$(cmd_mount)
+    if echo "$out" | jq -e '.mounted == true' >/dev/null 2>&1; then echo "$out"; return 0; fi
+    [ "$n" -lt 5 ] && sleep 2
+  done
+  echo "$out"
+}
+
+case "${1:-}" in
+  status)      status_json ;;
+  mount-wait)  cmd_mount_wait ;;
+  scan)        cmd_scan ;;
+  mount)       cmd_mount ;;
+  format)      [ -n "${2:-}" ] || fail "which disk?"; cmd_format "$2" ;;
+  create-img)  [ -n "${2:-}" ] && [ -n "${3:-}" ] || fail "usage: trifs create-img PARTITION GB"; cmd_create_img "$2" "$3" ;;
+  unmount|umount) cmd_unmount ;;
+  *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount"}'; exit 2 ;;
+esac

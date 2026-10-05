@@ -1,0 +1,16 @@
+#!/bin/bash
+# The TrimangeesOS desktop session (runs as the user "trimangees" inside X).
+export HOME=/var/lib/trimangees
+export USER=trimangees LOGNAME=trimangees
+export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export XDG_SESSION_TYPE=x11 XDG_CURRENT_DESKTOP=TrimangeesOS
+export LANG=en_IN.UTF-8 LC_ALL=en_IN.UTF-8
+export NO_AT_BRIDGE=1 LIBGL_ALWAYS_SOFTWARE=1
+mkdir -p "$XDG_RUNTIME_DIR" /var/log/trimangees 2>/dev/null
+
+# plain background until the desktop paints, keyboard, no screen blanking
+xsetroot -solid '#0a0a14' 2>/dev/null
+setxkbmap -layout "${TRIMANGEES_KEYMAP:-us}" 2>/dev/null
+xset s off -dpms s noblank 2>/dev/null
+
+exec dbus-run-session -- /usr/local/bin/trimangees-desktop

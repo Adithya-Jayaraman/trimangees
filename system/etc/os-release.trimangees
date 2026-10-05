@@ -1,0 +1,6 @@
+PRETTY_NAME="TrimangeesOS 3.0"
+NAME="TrimangeesOS"
+VERSION="3.0"
+ID=trimangees
+ID_LIKE="ubuntu debian"
+HOME_URL="https://github.com/"

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trimangees Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+:root{--bg:linear-gradient(135deg,#03000b 0%,#0f172a 100%);--glass:rgba(255,255,255,0.04);--gb:rgba(255,255,255,0.1);--text:#e0e0e0;--muted:rgba(255,255,255,0.55);--cyan:#00f0ff;--purple:#7b2cbf;--amber:#ff9d00;--sur:rgba(255,255,255,0.05);}
+*{margin:0;padding:0;box-sizing:border-box;cursor:none;}
+input,textarea,select,[contenteditable]{cursor:text!important;}
+button,a,.tool-btn,.menu-item,.dd-item,.outline-item,.met-term{cursor:pointer!important;}
+body{background:var(--bg);background-attachment:fixed;color:var(--text);font-family:'Outfit',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+/* CURSOR */
+.cursor-dot{position:fixed;top:0;left:0;transform:translate(-50%,-50%);border-radius:50%;pointer-events:none;z-index:9999;width:14px;height:14px;background:var(--cyan);border:1px solid #fff;box-shadow:0 0 12px var(--cyan);transition:background .1s,transform .12s;will-change:transform;}
+body.hovering .cursor-dot{transform:translate(-50%,-50%) scale(1.5);background:#ffea00;border-color:#ffea00;box-shadow:0 0 20px #ffea00;}
+.ct{position:fixed;top:0;left:0;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);z-index:9995;filter:blur(4px);opacity:0;animation:ft .7s ease-out forwards;}
+@keyframes ft{0%{opacity:.5;transform:translate(-50%,-50%) scale(1);}100%{opacity:0;transform:translate(-50%,-50%) scale(0);}}
+#starfield{position:fixed;inset:0;z-index:0;pointer-events:none;}
+/* TOPBAR */
+#topbar{display:flex;align-items:center;gap:10px;padding:0 16px;height:52px;background:rgba(3,0,11,0.88);backdrop-filter:blur(20px);border-bottom:1px solid var(--gb);flex-shrink:0;z-index:10;position:relative;}
+#logo{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#fff;text-decoration:none;}
+#logo svg{width:28px;height:28px;flex-shrink:0;}
+.app-name{background:linear-gradient(90deg,var(--cyan),var(--purple));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:700;}
+#doc-name{flex:1;max-width:260px;font-size:14px;font-weight:500;color:var(--text);background:transparent;border:none;outline:none;font-family:'Outfit',sans-serif;padding:4px 8px;border-radius:6px;transition:.15s;}
+#doc-name:focus{background:var(--glass);border:1px solid var(--cyan);}
+#save-status{font-size:11px;color:var(--muted);white-space:nowrap;}
+/* word goal progress */
+#goal-wrap{display:flex;align-items:center;gap:6px;opacity:0;transition:opacity .3s;}
+#goal-wrap.visible{opacity:1;}
+#goal-bar-outer{width:60px;height:4px;background:rgba(255,255,255,.1);border-radius:2px;}
+#goal-bar{height:100%;background:var(--cyan);border-radius:2px;transition:width .3s;}
+#goal-label{font-size:10px;color:var(--muted);white-space:nowrap;}
+.topbar-r{display:flex;align-items:center;gap:6px;margin-left:auto;}
+.tb-btn{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:50px;border:1px solid var(--gb);background:var(--glass);color:var(--text);font-size:11px;font-family:'Outfit',sans-serif;font-weight:500;transition:.2s;white-space:nowrap;}
+.tb-btn:hover{border-color:var(--cyan);box-shadow:0 0 14px rgba(0,240,255,.3);color:#fff;}
+.tb-btn.active,.tb-btn.on{border-color:var(--cyan);color:var(--cyan);}
+.tb-btn.primary{background:linear-gradient(90deg,var(--purple),var(--cyan));border:none;color:#fff;}
+.tb-btn.amber{border-color:rgba(255,157,0,.45);color:rgba(255,157,0,.9);}
+.tb-btn.amber:hover{border-color:var(--amber);color:var(--amber);}
+/* MENUBAR */
+#menubar{display:flex;align-items:center;gap:2px;padding:0 12px;height:32px;background:rgba(3,0,11,0.68);border-bottom:1px solid var(--gb);flex-shrink:0;z-index:10;position:relative;}
+.menu-item{padding:3px 11px;font-size:12px;color:var(--muted);border-radius:4px;position:relative;transition:.15s;font-family:'Outfit',sans-serif;}
+.menu-item:hover{background:var(--glass);color:var(--text);}
+.dropdown{display:none;position:absolute;top:calc(100%+4px);left:0;background:rgba(6,2,18,.98);backdrop-filter:blur(20px);border:1px solid var(--gb);border-radius:10px;min-width:200px;z-index:999;padding:4px;box-shadow:0 14px 45px rgba(0,0,0,.75);}
+.menu-item:hover .dropdown{display:block;}
+.dd-item{display:flex;align-items:center;gap:9px;padding:7px 12px;font-size:12px;color:var(--text);border-radius:6px;white-space:nowrap;transition:.1s;font-family:'Outfit',sans-serif;}
+.dd-item:hover{background:rgba(0,240,255,.08);color:var(--cyan);}
+.dd-item .sc{margin-left:auto;font-size:10px;color:var(--muted);}
+.dd-item .tri{margin-left:auto;font-size:8px;font-weight:700;background:linear-gradient(90deg,#ff9d00,#00f0ff);-webkit-background-clip:text;background-clip:text;color:transparent;}
+.dd-sep{height:1px;background:var(--gb);margin:3px 0;}
+/* TOOLBAR */
+#toolbar{display:flex;align-items:center;gap:2px;padding:0 10px;height:40px;background:rgba(3,0,11,0.58);border-bottom:1px solid var(--gb);flex-shrink:0;z-index:9;overflow:hidden;position:relative;}
+.tsep{width:1px;height:20px;background:rgba(255,255,255,.08);margin:0 3px;flex-shrink:0;}
+.tool-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:5px;border:none;background:transparent;color:var(--muted);font-size:12px;font-family:'Outfit',sans-serif;transition:.15s;flex-shrink:0;}
+.tool-btn:hover{background:var(--sur);color:var(--cyan);}
+select.ts{height:26px;padding:0 5px;background:var(--glass);border:1px solid var(--gb);border-radius:5px;color:var(--text);font-size:11px;font-family:'Outfit',sans-serif;outline:none;flex-shrink:0;}
+select.ts:focus{border-color:var(--cyan);}
+input.fsi{width:36px;height:26px;padding:0 3px;background:var(--glass);border:1px solid var(--gb);border-radius:5px;color:var(--text);font-size:11px;font-family:'Outfit',sans-serif;text-align:center;outline:none;}
+input[type=color].cpick{width:26px;height:26px;padding:2px;border-radius:5px;border:1px solid var(--gb);background:var(--glass);}
+/* MAIN */
+#main{display:flex;flex:1;overflow:hidden;position:relative;z-index:1;}
+/* SIDEBAR — shared between Outline and Met Glossary modes */
+#sidebar{width:210px;background:rgba(3,0,11,.8);border-right:1px solid var(--gb);display:flex;flex-direction:column;flex-shrink:0;transition:width .2s;overflow:hidden;}
+#sidebar.collapsed{width:0;}
+.sb-tabs{display:flex;border-bottom:1px solid var(--gb);flex-shrink:0;}
+.sb-tab{flex:1;padding:7px 4px;font-size:10px;font-weight:600;text-align:center;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;font-family:'Outfit',sans-serif;transition:.15s;}
+.sb-tab.active{color:var(--cyan);border-bottom:2px solid var(--cyan);}
+.sb-tab:hover:not(.active){color:var(--text);}
+.sb-panel{display:none;flex:1;flex-direction:column;overflow:hidden;}
+.sb-panel.active{display:flex;}
+/* Outline panel */
+#outline{flex:1;overflow-y:auto;padding:5px 0;}
+.outline-item{padding:5px 14px;font-size:11px;color:var(--muted);border-left:2px solid transparent;transition:.1s;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Outfit',sans-serif;}
+.outline-item:hover{color:var(--cyan);border-left-color:var(--cyan);background:rgba(0,240,255,.04);}
+.outline-h2{padding-left:22px;font-size:10.5px;}.outline-h3{padding-left:30px;font-size:10px;color:rgba(255,255,255,.3);}
+/* Met Glossary panel */
+#met-search{margin:8px;width:calc(100%-16px);padding:5px 8px;background:rgba(255,255,255,.05);border:1px solid var(--gb);border-radius:5px;color:var(--text);font-size:11px;font-family:'Outfit',sans-serif;outline:none;width:calc(100% - 16px);}
+#met-search:focus{border-color:var(--amber);}
+#met-list{flex:1;overflow-y:auto;padding:3px 0;}
+.met-term{padding:7px 12px;border-left:2px solid transparent;transition:.15s;}
+.met-term:hover{background:rgba(255,157,0,.06);border-left-color:var(--amber);}
+.met-name{font-size:11px;font-weight:600;color:var(--text);font-family:'Outfit',sans-serif;}
+.met-def{font-size:9.5px;color:var(--muted);line-height:1.45;margin-top:2px;font-family:'Outfit',sans-serif;}
+/* Canvas */
+#canvas-wrap{flex:1;overflow-y:auto;background:rgba(14,20,38,.65);display:flex;flex-direction:column;align-items:center;padding:28px 20px 80px;}
+#ruler{width:794px;max-width:100%;height:22px;background:rgba(3,0,11,.6);border:1px solid var(--gb);border-radius:4px 4px 0 0;flex-shrink:0;}
+/* PAGE */
+.page{width:794px;max-width:100%;min-height:1123px;background:#fff;border-radius:2px;box-shadow:0 8px 40px rgba(0,0,0,.6);padding:80px 90px;position:relative;transition:background .3s,box-shadow .3s;}
+body.night-page .page{background:#0d1117;box-shadow:0 8px 40px rgba(0,0,0,.8),0 0 60px rgba(0,240,255,.04);}
+#editor{min-height:963px;outline:none;font-family:'Lora',Georgia,serif;font-size:12pt;line-height:1.75;color:#0a0a2b;caret-color:#7b2cbf;user-select:text;word-wrap:break-word;transition:color .3s;}
+body.night-page #editor{color:#c9d1d9;caret-color:#00f0ff;}
+#editor h1{font-size:26pt;font-weight:700;margin:20px 0 12px;color:#03000b;font-family:'Playfair Display',serif;line-height:1.25;}
+#editor h2{font-size:18pt;font-weight:700;margin:18px 0 10px;color:#0f172a;font-family:'Playfair Display',serif;}
+#editor h3{font-size:14pt;font-weight:600;margin:14px 0 8px;color:#1e293b;font-family:'Playfair Display',serif;}
+body.night-page #editor h1{color:#e6edf3;}
+body.night-page #editor h2{color:#cdd9e5;}
+body.night-page #editor h3{color:#aac8e0;}
+#editor p{margin:0 0 12px;}
+#editor ul,#editor ol{margin:8px 0 12px 28px;}
+#editor li{margin-bottom:4px;}
+#editor blockquote{border-left:3px solid #7b2cbf;padding:10px 18px;margin:16px 0;color:#334155;font-style:italic;background:#f5f3ff;border-radius:0 6px 6px 0;}
+body.night-page #editor blockquote{background:#161b22;color:#8b949e;}
+#editor table{border-collapse:collapse;width:100%;margin:16px 0;font-size:11pt;}
+#editor th{background:#0f172a;color:#fff;padding:8px 12px;text-align:left;font-weight:600;font-family:'Outfit',sans-serif;}
+#editor td{border:1px solid #e2e8f0;padding:7px 12px;}
+#editor tr:nth-child(even) td{background:#f8fafc;}
+body.night-page #editor td{border-color:#30363d;}
+body.night-page #editor tr:nth-child(even) td{background:#161b22;}
+#editor a{color:#7b2cbf;}
+body.night-page #editor a{color:#58a6ff;}
+#editor img{max-width:100%;border-radius:6px;margin:8px 0;display:block;}
+#editor pre{background:#0f172a;color:#00f0ff;padding:16px;border-radius:8px;font-family:monospace;font-size:11pt;overflow-x:auto;margin:12px 0;}
+#editor hr{border:none;border-top:2px solid #7b2cbf;margin:20px 0;opacity:.4;}
+.find-hl{background:#fffde7;border-radius:2px;}
+.find-hl-active{background:#ffd600!important;border-radius:2px;}
+/* STATUS BAR */
+#statusbar{display:flex;align-items:center;gap:16px;padding:0 16px;height:26px;background:rgba(3,0,11,.88);border-top:1px solid var(--gb);font-size:10px;color:var(--muted);flex-shrink:0;z-index:10;position:relative;font-family:'Outfit',sans-serif;}
+#statusbar b{color:var(--cyan);font-weight:500;}
+/* FIND BAR */
+#find-bar{display:none;position:fixed;top:138px;right:20px;background:rgba(6,2,18,.98);backdrop-filter:blur(20px);border:1px solid var(--gb);border-radius:12px;padding:14px;z-index:500;box-shadow:0 12px 40px rgba(0,0,0,.75);min-width:290px;}
+#find-bar input{width:100%;padding:6px 10px;background:rgba(255,255,255,.05);border:1px solid var(--gb);border-radius:6px;color:var(--text);font-size:12px;font-family:'Outfit',sans-serif;outline:none;margin-bottom:6px;}
+#find-bar input:focus{border-color:var(--cyan);}
+.find-row{display:flex;gap:5px;}
+.find-row button{flex:1;padding:5px;background:var(--glass);border:1px solid var(--gb);border-radius:5px;color:var(--muted);font-size:10px;font-family:'Outfit',sans-serif;transition:.15s;}
+.find-row button:hover{border-color:var(--cyan);color:var(--cyan);}
+#find-stat{font-size:10px;color:var(--muted);margin-top:5px;font-family:'Outfit',sans-serif;}
+/* DIALOGS */
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:250;backdrop-filter:blur(4px);}
+#tdialog,#goal-dialog{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(6,2,18,.98);border:1px solid var(--gb);border-radius:14px;padding:24px;z-index:300;box-shadow:0 20px 60px rgba(0,0,0,.8);min-width:240px;}
+#tdialog h3,#goal-dialog h3{font-size:14px;font-weight:600;margin-bottom:16px;color:var(--text);font-family:'Outfit',sans-serif;}
+.dlg-label{font-size:11px;color:var(--muted);display:block;margin-bottom:4px;font-family:'Outfit',sans-serif;}
+.dlg-input{width:100%;padding:7px 10px;background:var(--glass);border:1px solid var(--gb);border-radius:6px;color:var(--text);font-size:13px;font-family:'Outfit',sans-serif;outline:none;margin-bottom:12px;}
+.dlg-input:focus{border-color:var(--cyan);}
+.dia-btns{display:flex;gap:8px;justify-content:flex-end;}
+.dia-btns button{padding:7px 18px;border-radius:50px;border:1px solid var(--gb);background:var(--glass);color:var(--muted);font-size:12px;font-family:'Outfit',sans-serif;transition:.15s;}
+.dia-btns button.ok{background:linear-gradient(90deg,var(--purple),var(--cyan));border:none;color:#fff;}
+.dia-btns button.ok:hover{box-shadow:0 0 20px rgba(0,240,255,.4);}
+::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border-radius:3px;}::-webkit-scrollbar-thumb:hover{background:var(--cyan);}
+@media print{#topbar,#menubar,#toolbar,#statusbar,#sidebar,#ruler,#find-bar,#overlay,#tdialog,#goal-dialog,canvas,.cursor-dot,.ct{display:none!important;} #main{display:block;overflow:visible;} #canvas-wrap{background:none;padding:0;} .page{box-shadow:none;width:100%;max-width:100%;background:#fff!important;} #editor{color:#0a0a2b!important;}}
+</style>
+</head>
+<body>
+<canvas id="starfield"></canvas>
+<div class="cursor-dot" id="cursor"></div>
+
+<div id="topbar">
+  <a id="logo" href="https://trimangees.netlify.app">
+    <svg viewBox="0 0 28 28" fill="none"><ellipse cx="14" cy="18" rx="12" ry="7" fill="#0f172a"/><path d="M3 17 Q7 8 14 7 Q21 6 25 17" stroke="#00f0ff" stroke-width="1.5" fill="none" opacity=".8"/><path d="M5 17 Q9 11 14 10 Q19 9 23 17" stroke="#7b2cbf" stroke-width="1.5" fill="none" opacity=".9"/><path d="M14 7 L12 2 M14 7 L16 1.5 M14 7 L10 3.5" stroke="#00f0ff" stroke-width="1" stroke-linecap="round" opacity=".6"/></svg>
+    Trimangees
+  </a>
+  <span style="color:rgba(255,255,255,.18);font-size:20px">›</span>
+  <span class="app-name">Docs</span>
+  <input id="doc-name" type="text" value="Untitled Document" spellcheck="false">
+  <span id="save-status">All changes saved</span>
+  <div id="goal-wrap">
+    <div id="goal-bar-outer"><div id="goal-bar" style="width:0%"></div></div>
+    <span id="goal-label">0 / 0</span>
+  </div>
+  <div class="topbar-r">
+    <button class="tb-btn amber" onclick="toggleSB('met')" title="Met Glossary — Trimangees Exclusive">☁ Glossary</button>
+    <button class="tb-btn" id="night-btn" onclick="toggleNight()" title="Night Page — Trimangees Exclusive"><i class="fas fa-moon" style="font-size:10px"></i> Night</button>
+    <button class="tb-btn" onclick="showFindBar()"><i class="fas fa-search" style="font-size:10px"></i> Find</button>
+    <button class="tb-btn" onclick="window.print()"><i class="fas fa-print" style="font-size:10px"></i> Print</button>
+    <button class="tb-btn primary" onclick="exportDoc()"><i class="fas fa-download" style="font-size:10px"></i> Export</button>
+  </div>
+</div>
+
+<div id="menubar">
+  <div class="menu-item">File<div class="dropdown">
+    <div class="dd-item" onclick="newDoc()"><i class="fas fa-file fa-fw"></i>New<span class="sc">Ctrl+N</span></div>
+    <div class="dd-item" onclick="openDoc()"><i class="fas fa-folder-open fa-fw"></i>Open…<span class="sc">Ctrl+O</span></div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="saveLocal()"><i class="fas fa-save fa-fw"></i>Save<span class="sc">Ctrl+S</span></div>
+    <div class="dd-item" onclick="exportDoc()"><i class="fas fa-code fa-fw"></i>Download HTML</div>
+    <div class="dd-item" onclick="exportTxt()"><i class="fas fa-file-alt fa-fw"></i>Download TXT</div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="window.print()"><i class="fas fa-print fa-fw"></i>Print<span class="sc">Ctrl+P</span></div>
+  </div></div>
+  <div class="menu-item">Edit<div class="dropdown">
+    <div class="dd-item" onclick="document.execCommand('undo')"><i class="fas fa-undo fa-fw"></i>Undo<span class="sc">Ctrl+Z</span></div>
+    <div class="dd-item" onclick="document.execCommand('redo')"><i class="fas fa-redo fa-fw"></i>Redo<span class="sc">Ctrl+Y</span></div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="document.execCommand('selectAll')"><i class="fas fa-object-group fa-fw"></i>Select All<span class="sc">Ctrl+A</span></div>
+    <div class="dd-item" onclick="showFindBar()"><i class="fas fa-search fa-fw"></i>Find &amp; Replace<span class="sc">Ctrl+H</span></div>
+  </div></div>
+  <div class="menu-item">Insert<div class="dropdown">
+    <div class="dd-item" onclick="showTDialog()"><i class="fas fa-table fa-fw"></i>Table…</div>
+    <div class="dd-item" onclick="insImg()"><i class="fas fa-image fa-fw"></i>Image…</div>
+    <div class="dd-item" onclick="insHR()"><i class="fas fa-minus fa-fw"></i>Divider</div>
+    <div class="dd-item" onclick="insDate()"><i class="fas fa-calendar fa-fw"></i>Today's Date</div>
+    <div class="dd-item" onclick="insLink()"><i class="fas fa-link fa-fw"></i>Link…</div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="insStormReport()" style="color:rgba(255,157,0,.9)">⚡ Storm Observation Report<span class="tri">TRIMANGEES</span></div>
+    <div class="dd-item" onclick="insStormJournal()" style="color:rgba(255,157,0,.9)">📓 Storm Journal Entry<span class="tri">TRIMANGEES</span></div>
+    <div class="dd-item" onclick="toggleSB('met')" style="color:rgba(255,157,0,.9)">☁ Met Glossary Panel<span class="tri">TRIMANGEES</span></div>
+  </div></div>
+  <div class="menu-item">Format<div class="dropdown">
+    <div class="dd-item" onclick="fmt('bold')"><b>B</b> Bold<span class="sc">Ctrl+B</span></div>
+    <div class="dd-item" onclick="fmt('italic')"><i>I</i> Italic<span class="sc">Ctrl+I</span></div>
+    <div class="dd-item" onclick="fmt('underline')"><u>U</u> Underline<span class="sc">Ctrl+U</span></div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="fmt('formatBlock','h1')">H1 Heading 1</div>
+    <div class="dd-item" onclick="fmt('formatBlock','h2')">H2 Heading 2</div>
+    <div class="dd-item" onclick="fmt('formatBlock','h3')">H3 Heading 3</div>
+    <div class="dd-item" onclick="fmt('formatBlock','p')">¶ Paragraph</div>
+    <div class="dd-item" onclick="fmt('formatBlock','blockquote')">❝ Blockquote</div>
+    <div class="dd-item" onclick="fmt('formatBlock','pre')">⌨ Code Block</div>
+  </div></div>
+  <div class="menu-item">View<div class="dropdown">
+    <div class="dd-item" onclick="toggleSB('outline')"><i class="fas fa-list fa-fw"></i>Outline Sidebar</div>
+    <div class="dd-item" onclick="toggleSB('met')">☁ Met Glossary<span class="tri">TRIMANGEES</span></div>
+    <div class="dd-item" onclick="toggleNight()"><i class="fas fa-moon fa-fw"></i>Night Page<span class="tri">TRIMANGEES</span></div>
+    <div class="dd-item" onclick="showGoalDialog()">🎯 Word Count Goal<span class="tri">TRIMANGEES</span></div>
+    <div class="dd-sep"></div>
+    <div class="dd-item" onclick="zIn()"><i class="fas fa-search-plus fa-fw"></i>Zoom In<span class="sc">Ctrl+=</span></div>
+    <div class="dd-item" onclick="zOut()"><i class="fas fa-search-minus fa-fw"></i>Zoom Out<span class="sc">Ctrl+-</span></div>
+    <div class="dd-item" onclick="zReset()"><i class="fas fa-compress fa-fw"></i>Reset Zoom</div>
+  </div></div>
+</div>
+
+<div id="toolbar">
+  <select class="ts" style="width:112px" onchange="document.getElementById('editor').style.fontFamily=this.value">
+    <option value="'Lora',Georgia,serif">Lora (Serif)</option>
+    <option value="'Outfit',sans-serif">Outfit (Sans)</option>
+    <option value="Georgia,serif">Georgia</option>
+    <option value="'Courier New',monospace">Courier New</option>
+    <option value="Arial,sans-serif">Arial</option>
+  </select>
+  <div class="tsep"></div>
+  <select class="ts" style="width:92px" onchange="fmt('formatBlock',this.value);this.selectedIndex=0">
+    <option value="p" selected>Paragraph</option>
+    <option value="h1">Heading 1</option>
+    <option value="h2">Heading 2</option>
+    <option value="h3">Heading 3</option>
+    <option value="pre">Code</option>
+    <option value="blockquote">Quote</option>
+  </select>
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="fmt('bold')" style="font-weight:700" title="Bold">B</button>
+  <button class="tool-btn" onclick="fmt('italic')" style="font-style:italic" title="Italic">I</button>
+  <button class="tool-btn" onclick="fmt('underline')" style="text-decoration:underline;font-size:11px" title="Underline">U</button>
+  <button class="tool-btn" onclick="fmt('strikeThrough')" style="text-decoration:line-through;font-size:11px" title="Strikethrough">S</button>
+  <button class="tool-btn" onclick="fmt('superscript')" style="font-size:9px" title="Superscript">x²</button>
+  <button class="tool-btn" onclick="fmt('subscript')" style="font-size:9px" title="Subscript">x₂</button>
+  <div class="tsep"></div>
+  <input type="number" class="fsi" id="fsize" value="12" min="6" max="96" title="Font size (pt)" onchange="applySize(this.value)">
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="document.getElementById('tc').click()" style="font-weight:700;font-size:11px;border-bottom:2px solid #00f0ff" title="Text color">A</button>
+  <input type="color" class="cpick" id="tc" value="#0a0a2b" onchange="fmt('foreColor',this.value)">
+  <button class="tool-btn" onclick="document.getElementById('hc').click()" style="font-size:10px;background:#fffde7;color:#0a0a2b;border-radius:3px" title="Highlight">H</button>
+  <input type="color" class="cpick" id="hc" value="#fff9c4" onchange="fmt('backColor',this.value)">
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="fmt('justifyLeft')" title="Align left"><i class="fas fa-align-left" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmt('justifyCenter')" title="Center"><i class="fas fa-align-center" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmt('justifyRight')" title="Align right"><i class="fas fa-align-right" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmt('justifyFull')" title="Justify"><i class="fas fa-align-justify" style="font-size:10px"></i></button>
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="fmt('insertUnorderedList')" title="Bullet list"><i class="fas fa-list-ul" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmt('insertOrderedList')" title="Numbered list"><i class="fas fa-list-ol" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmt('outdent')" title="Outdent"><i class="fas fa-outdent" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="fmt('indent')" title="Indent"><i class="fas fa-indent" style="font-size:10px"></i></button>
+  <div class="tsep"></div>
+  <button class="tool-btn" onclick="insLink()" title="Link"><i class="fas fa-link" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="showTDialog()" title="Table"><i class="fas fa-table" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="insImg()" title="Image"><i class="fas fa-image" style="font-size:10px"></i></button>
+  <button class="tool-btn" onclick="insStormReport()" title="Storm Report — Trimangees Exclusive" style="color:rgba(255,157,0,.8);font-size:11px">⚡</button>
+  <button class="tool-btn" onclick="fmt('removeFormat')" title="Clear formatting" style="font-size:10px">✕f</button>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div class="sb-tabs">
+      <div class="sb-tab active" id="tab-outline" onclick="switchSBTab('outline')">Outline</div>
+      <div class="sb-tab" id="tab-met" onclick="switchSBTab('met')" style="color:rgba(255,157,0,.7)">☁ Met</div>
+    </div>
+    <div class="sb-panel active" id="panel-outline">
+      <div id="outline"><div style="padding:14px;font-size:11px;color:rgba(255,255,255,.3)">Add headings to build outline.</div></div>
+    </div>
+    <div class="sb-panel" id="panel-met">
+      <input type="text" id="met-search" placeholder="Search meteorology…" oninput="filterMet(this.value)">
+      <div id="met-list"></div>
+    </div>
+  </div>
+  <div id="canvas-wrap">
+    <div id="ruler"></div>
+    <div class="page">
+      <div id="editor" contenteditable="true" spellcheck="true">
+        <h1>Untitled Document</h1>
+        <p>Start writing here. Use the toolbar to format text, insert tables, images, and more.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="statusbar">
+  <span>Words: <b id="wc">0</b></span>
+  <span>Chars: <b id="cc">0</b></span>
+  <span>Lines: <b id="lc">0</b></span>
+  <span>Read: <b id="rt">0 min</b></span>
+  <span>Read: <b id="rt">0 min</b></span>
+  <span style="margin-left:auto">Zoom: <b id="zl">100%</b></span>
+  <span style="color:rgba(0,240,255,.4)">Trimangees Docs</span>
+</div>
+
+<div id="find-bar">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <span style="font-size:12px;font-weight:600;color:var(--cyan)">Find &amp; Replace</span>
+    <span onclick="hideFB()" style="color:var(--muted);font-size:14px;padding:2px 6px">✕</span>
+  </div>
+  <input type="text" id="fi" placeholder="Find…" oninput="onFindInput()">
+  <input type="text" id="ri" placeholder="Replace with…">
+  <div class="find-row">
+    <button onclick="fPrev()">↑ Prev</button>
+    <button onclick="fNext()">↓ Next</button>
+    <button onclick="repOne()">Replace</button>
+    <button onclick="repAll()">Replace All</button>
+  </div>
+  <div id="find-stat"></div>
+</div>
+
+<div id="overlay" onclick="closeDialogs()"></div>
+<div id="tdialog">
+  <h3>Insert Table</h3>
+  <label class="dlg-label">Columns</label><input type="number" class="dlg-input" id="tcols" value="3" min="1" max="20">
+  <label class="dlg-label">Rows</label><input type="number" class="dlg-input" id="trows" value="3" min="1" max="50">
+  <div class="dia-btns"><button onclick="closeDialogs()">Cancel</button><button class="ok" onclick="doTable()">Insert</button></div>
+</div>
+<div id="goal-dialog">
+  <h3>🎯 Word Count Goal</h3>
+  <label class="dlg-label">Target words (0 to disable)</label>
+  <input type="number" class="dlg-input" id="goal-input" value="0" min="0" max="100000">
+  <div class="dia-btns"><button onclick="closeDialogs()">Cancel</button><button class="ok" onclick="setGoal()">Set Goal</button></div>
+</div>
+
+<input type="file" id="img-in" accept="image/*" style="display:none" onchange="doImg(this)">
+<input type="file" id="open-in" accept=".html,.htm,.txt" style="display:none" onchange="doOpen(this)">
+
+<script>
+// ── CURSOR ──
+const cur = document.getElementById('cursor');
+document.addEventListener('mousemove', e => {
+  cur.style.left=e.clientX+'px'; cur.style.top=e.clientY+'px';
+  if(Math.random()>.38){const t=document.createElement('div');t.className='ct';t.style.cssText=`left:${e.clientX}px;top:${e.clientY}px;width:${4+Math.random()*5}px;height:${4+Math.random()*5}px;background:${Math.random()>.5?'var(--cyan)':'var(--purple)'}`;document.body.appendChild(t);setTimeout(()=>t.remove(),700);}
+});
+document.querySelectorAll('a,button,.tool-btn,.menu-item,.dd-item,.outline-item,.met-term,.sb-tab').forEach(el=>{el.addEventListener('mouseenter',()=>document.body.classList.add('hovering'));el.addEventListener('mouseleave',()=>document.body.classList.remove('hovering'));});
+
+// ── STARFIELD ──
+const sv=document.getElementById('starfield'),sx=sv.getContext('2d');let SW,SH,pts=[];
+function rsStar(){SW=sv.width=window.innerWidth;SH=sv.height=window.innerHeight;}window.addEventListener('resize',rsStar);rsStar();
+class SPt{constructor(){this.x=Math.random()*SW;this.y=Math.random()*SH;this.vx=(Math.random()-.5)*.4;this.vy=(Math.random()-.5)*.4;this.s=Math.random()*1.5;this.a=Math.random()*.4+.1;this.c=Math.random()>.5?'rgba(0,240,255,':'rgba(123,44,191,';}update(){this.x+=this.vx;this.y+=this.vy;if(this.x<0)this.x=SW;if(this.x>SW)this.x=0;if(this.y<0)this.y=SH;if(this.y>SH)this.y=0;}draw(){sx.beginPath();sx.arc(this.x,this.y,this.s,0,Math.PI*2);sx.fillStyle=this.c+this.a+')';sx.fill();}}
+for(let i=0;i<120;i++)pts.push(new SPt());
+function aStar(){sx.clearRect(0,0,SW,SH);for(let i=0;i<pts.length;i++){pts[i].update();pts[i].draw();for(let j=i+1;j<pts.length;j++){const dx=pts[i].x-pts[j].x,dy=pts[i].y-pts[j].y,d=Math.sqrt(dx*dx+dy*dy);if(d<90){sx.beginPath();sx.strokeStyle=`rgba(123,44,191,${.07-d/900})`;sx.lineWidth=.4;sx.moveTo(pts[i].x,pts[i].y);sx.lineTo(pts[j].x,pts[j].y);sx.stroke();}}}requestAnimationFrame(aStar);}aStar();
+
+// ── EDITOR ──
+const ed = document.getElementById('editor');
+let zoom=1, saveT, wordT, wordGoal=0;
+
+function fmt(cmd,val){ed.focus();document.execCommand(cmd,false,val||null);scheduleTick();}
+
+function applySize(pt){
+  ed.focus();
+  document.execCommand('fontSize',false,7);
+  ed.querySelectorAll('font[size="7"]').forEach(s=>{s.removeAttribute('size');s.style.fontSize=Math.round(parseInt(pt)*1.333)+'px';});
+}
+
+function scheduleTick(){clearTimeout(wordT);wordT=setTimeout(tick,150);}
+
+function tick(){
+  const text=ed.innerText||'';
+  const words=text.trim()?text.trim().split(/\s+/).length:0;
+  document.getElementById('wc').textContent=words;
+  document.getElementById('cc').textContent=text.length;
+  document.getElementById('lc').textContent=text.split('\n').length;
+  // Reading time: avg 200 wpm
+  const mins=Math.max(1,Math.round(words/200));
+  document.getElementById('rt').textContent=mins+' min'+(mins>1?'s':'');
+  document.getElementById('rt').textContent=Math.max(1,Math.ceil(words/200))+' min';
+  // Word goal
+  if(wordGoal>0){
+    const pct=Math.min(100,Math.round(words/wordGoal*100));
+    document.getElementById('goal-bar').style.width=pct+'%';
+    document.getElementById('goal-bar').style.background=pct>=100?'var(--green)':pct>50?'var(--amber)':'var(--cyan)';
+    document.getElementById('goal-label').textContent=words+' / '+wordGoal;
+    document.getElementById('goal-wrap').classList.add('visible');
+  }
+  updateOutline();
+  document.getElementById('save-status').textContent='Saving…';
+  clearTimeout(saveT);
+  saveT=setTimeout(()=>{saveLocal();document.getElementById('save-status').textContent='All changes saved';},1500);
+}
+
+function updateOutline(){
+  const ob=document.getElementById('outline');
+  const hs=ed.querySelectorAll('h1,h2,h3');
+  if(!hs.length){ob.innerHTML='<div style="padding:14px;font-size:11px;color:rgba(255,255,255,.3)">Add headings to build outline.</div>';return;}
+  ob.innerHTML='';
+  hs.forEach(h=>{const d=document.createElement('div');d.className='outline-item outline-'+h.tagName.toLowerCase();d.textContent=h.innerText.trim()||'(empty)';d.onclick=()=>h.scrollIntoView({behavior:'smooth',block:'start'});ob.appendChild(d);});
+}
+
+// ── SIDEBAR ──
+let sbMode='outline';
+function toggleSB(mode){
+  const sb=document.getElementById('sidebar');
+  if(sb.classList.contains('collapsed')){sb.classList.remove('collapsed');switchSBTab(mode);}
+  else if(sbMode===mode){sb.classList.add('collapsed');}
+  else{switchSBTab(mode);}
+}
+function switchSBTab(mode){
+  sbMode=mode;
+  document.querySelectorAll('.sb-tab').forEach(t=>t.classList.toggle('active',t.id==='tab-'+mode));
+  document.querySelectorAll('.sb-panel').forEach(p=>p.classList.toggle('active',p.id==='panel-'+mode));
+  if(mode==='met'){buildMetList('');setTimeout(()=>document.getElementById('met-search').focus(),100);}
+}
+
+// ── NIGHT PAGE — Trimangees Exclusive ──
+let isNight=false;
+function toggleNight(){
+  isNight=!isNight;
+  document.body.classList.toggle('night-page',isNight);
+  const btn=document.getElementById('night-btn');
+  btn.classList.toggle('on',isNight);
+  btn.innerHTML=isNight?'<i class="fas fa-sun" style="font-size:10px"></i> Day':'<i class="fas fa-moon" style="font-size:10px"></i> Night';
+}
+
+// ── WORD GOAL — Trimangees Exclusive ──
+function showGoalDialog(){document.getElementById('goal-dialog').style.display='block';document.getElementById('overlay').style.display='block';document.getElementById('goal-input').value=wordGoal;setTimeout(()=>document.getElementById('goal-input').focus(),50);}
+function setGoal(){wordGoal=parseInt(document.getElementById('goal-input').value)||0;closeDialogs();if(wordGoal===0)document.getElementById('goal-wrap').classList.remove('visible');tick();}
+
+// ── ZOOM ──
+function zIn(){zoom=Math.min(2,zoom+.1);applyZoom();}
+function zOut(){zoom=Math.max(.5,zoom-.1);applyZoom();}
+function zReset(){zoom=1;applyZoom();}
+function applyZoom(){
+  const page=document.querySelector('.page');
+  page.style.transform=`scale(${zoom})`;
+  page.style.transformOrigin='top center';
+  page.style.marginBottom=zoom>1?(zoom-1)*page.offsetHeight+'px':'0';
+  document.getElementById('zl').textContent=Math.round(zoom*100)+'%';
+}
+
+// ── FILE OPS ──
+function newDoc(){if(!confirm('New document? Unsaved changes will be lost.'))return;ed.innerHTML='<h1>Untitled Document</h1><p>Start writing here.</p>';document.getElementById('doc-name').value='Untitled Document';document.title='Trimangees Docs';tick();}
+function openDoc(){document.getElementById('open-in').click();}
+function doOpen(inp){
+  const f=inp.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    if(f.name.match(/\.txt$/i))ed.innerHTML=e.target.result.split(/\n\n+/).map(p=>`<p>${p.replace(/\n/g,'<br>')}</p>`).join('');
+    else{const p=new DOMParser(),d=p.parseFromString(e.target.result,'text/html');ed.innerHTML=d.body?d.body.innerHTML:e.target.result;}
+    document.getElementById('doc-name').value=f.name.replace(/\.[^.]+$/,'');
+    document.title=f.name.replace(/\.[^.]+$/,'')+' – Trimangees Docs';tick();
+  };r.readAsText(f);inp.value='';
+}
+function saveLocal(){try{localStorage.setItem('tri_doc_html',ed.innerHTML);localStorage.setItem('tri_doc_name',document.getElementById('doc-name').value);localStorage.setItem('tri_doc_night',isNight);}catch(e){}}
+function loadLocal(){try{const c=localStorage.getItem('tri_doc_html'),n=localStorage.getItem('tri_doc_name'),nt=localStorage.getItem('tri_doc_night');if(c)ed.innerHTML=c;if(n){document.getElementById('doc-name').value=n;document.title=n+' – Trimangees Docs';}if(nt==='true'){toggleNight();}}catch(e){}}
+function exportDoc(){
+  const name=document.getElementById('doc-name').value||'document';
+  const darkStyle=isNight?'body{background:#0d1117;color:#c9d1d9;}h1,h2,h3{color:#e6edf3;}':'';
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${name}</title><link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet"><style>body{font-family:'Lora',Georgia,serif;max-width:800px;margin:60px auto;font-size:12pt;line-height:1.75;color:#0a0a2b;padding:0 24px;}h1,h2,h3{font-family:'Playfair Display',serif;}h1{font-size:26pt;color:#03000b;}h2{font-size:18pt;color:#0f172a;}h3{font-size:14pt;}blockquote{border-left:3px solid #7b2cbf;padding:10px 18px;color:#334155;font-style:italic;background:#f5f3ff;}table{border-collapse:collapse;width:100%;}th{background:#0f172a;color:#fff;padding:8px 12px;}td{border:1px solid #e2e8f0;padding:7px 12px;}tr:nth-child(even)td{background:#f8fafc;}pre{background:#0f172a;color:#00f0ff;padding:16px;border-radius:8px;font-family:monospace;}a{color:#7b2cbf;}img{max-width:100%;}${darkStyle}</style></head><body>${ed.innerHTML}</body></html>`;
+  dl(name+'.html',html,'text/html');
+}
+function exportTxt(){dl((document.getElementById('doc-name').value||'document')+'.txt',ed.innerText,'text/plain');}
+function dl(fn,c,t){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:t}));a.download=fn;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),10000);}
+
+// ── INSERT ──
+function insImg(){document.getElementById('img-in').click();}
+function doImg(inp){const f=inp.files[0];if(!f)return;if(f.size>5*1024*1024){alert('Image too large (max 5MB)');inp.value='';return;}const r=new FileReader();r.onload=e=>{ed.focus();document.execCommand('insertHTML',false,`<img src="${e.target.result}" alt="${f.name}" style="max-width:100%;border-radius:6px;display:block;margin:8px 0;">`);scheduleTick();};r.readAsDataURL(f);inp.value='';}
+function insLink(){const u=prompt('Enter URL:');if(!u)return;const sel=window.getSelection();const t=sel&&sel.toString().trim()?sel.toString():prompt('Link text:',u)||u;ed.focus();document.execCommand('insertHTML',false,`<a href="${u}" target="_blank">${t}</a>`);}
+function insHR(){ed.focus();document.execCommand('insertHTML',false,'<hr><p></p>');}
+function insDate(){ed.focus();document.execCommand('insertText',false,new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'}));}
+function closeDialogs(){['tdialog','goal-dialog'].forEach(id=>document.getElementById(id).style.display='none');document.getElementById('overlay').style.display='none';}
+function showTDialog(){document.getElementById('tdialog').style.display='block';document.getElementById('overlay').style.display='block';}
+function doTable(){
+  const cols=Math.min(20,Math.max(1,parseInt(document.getElementById('tcols').value)||3));
+  const rows=Math.min(50,Math.max(1,parseInt(document.getElementById('trows').value)||3));
+  let h='<table><thead><tr>';for(let c=0;c<cols;c++)h+=`<th>Header ${c+1}</th>`;h+='</tr></thead><tbody>';
+  for(let r=0;r<rows;r++){h+='<tr>';for(let c=0;c<cols;c++)h+='<td>&nbsp;</td>';h+='</tr>';}h+='</tbody></table><p></p>';
+  ed.focus();document.execCommand('insertHTML',false,h);closeDialogs();scheduleTick();
+}
+
+// ── TRIMANGEES EXCLUSIVE: STORM OBSERVATION REPORT ──
+function insStormReport(){
+  const now=new Date();
+  const ds=now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const ts=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  const tpl=`<h1>Storm Observation Report</h1><p style="color:#888;font-size:10pt;margin-top:-8px">Trimangees Storm Spotters · Generated ${ds}</p><hr><h2>Observer &amp; Location</h2><table><thead><tr><th>Field</th><th>Details</th></tr></thead><tbody><tr><td><strong>Observer</strong></td><td>Click to fill</td></tr><tr><td><strong>Date</strong></td><td>${ds}</td></tr><tr><td><strong>Time (IST)</strong></td><td>${ts}</td></tr><tr><td><strong>Location</strong></td><td>Click to fill</td></tr><tr><td><strong>GPS</strong></td><td>Click to fill</td></tr></tbody></table><h2>Sky Conditions</h2><table><thead><tr><th>Parameter</th><th>Observation</th><th>Scale / Unit</th></tr></thead><tbody><tr><td><strong>Cloud Types</strong></td><td>Click to fill</td><td>WMO genus (Cb, Ns, Sc…)</td></tr><tr><td><strong>Cloud Cover</strong></td><td>Click to fill</td><td>Oktas (0–8)</td></tr><tr><td><strong>Cloud Base</strong></td><td>Click to fill</td><td>feet / metres</td></tr><tr><td><strong>Visibility</strong></td><td>Click to fill</td><td>kilometres</td></tr><tr><td><strong>Wind Direction</strong></td><td>Click to fill</td><td>Cardinal / degrees</td></tr><tr><td><strong>Wind Speed</strong></td><td>Click to fill</td><td>m/s &amp; Beaufort</td></tr><tr><td><strong>Temperature</strong></td><td>Click to fill</td><td>°C</td></tr><tr><td><strong>Dewpoint</strong></td><td>Click to fill</td><td>°C</td></tr><tr><td><strong>Pressure</strong></td><td>Click to fill</td><td>hPa</td></tr></tbody></table><h2>Notable Features</h2><table><thead><tr><th>Feature</th><th>Observed?</th><th>Notes</th></tr></thead><tbody><tr><td>Mammatus</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Arcus / Shelf Cloud</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Wall Cloud (Murus)</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Funnel Cloud / Tuba</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Lightning (CG / IC / CC)</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Ball Lightning</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Hail</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Virga</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr><tr><td>Pileus</td><td>☐ Yes &nbsp; ☐ No</td><td>&nbsp;</td></tr></tbody></table><h2>Narrative Description</h2><p>Click here to describe the event — onset, development, intensity, movement, duration, and decay.</p><h2>Cross-References</h2><table><thead><tr><th>Source</th><th>Details</th></tr></thead><tbody><tr><td>IMD Bulletin / Warning</td><td>&nbsp;</td></tr><tr><td>AccuWeather MinuteCast</td><td>&nbsp;</td></tr><tr><td>Zoom Earth / Satellite</td><td>&nbsp;</td></tr><tr><td>Lightning tracker (WWLLN)</td><td>&nbsp;</td></tr></tbody></table><h2>Media</h2><p>☐ Photos captured &nbsp;&nbsp; ☐ Video recorded &nbsp;&nbsp; ☐ Audio note made &nbsp;&nbsp; ☐ Uploaded to Trimangees archive</p><hr><p style="color:#aaa;font-size:9pt">Generated by Trimangees Docs — Storm Observation Template · trimangees.netlify.app</p>`;
+  ed.focus();document.execCommand('insertHTML',false,tpl);scheduleTick();
+}
+
+// ── TRIMANGEES EXCLUSIVE: STORM JOURNAL ENTRY ──
+// Quick timestamped journal entry for logging storm observations on the fly.
+function insStormJournal(){
+  const now=new Date();
+  const ds=now.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  const ts=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  const tpl=`<h2>📓 ${ds} · ${ts} IST</h2><p><strong>Location:</strong> &nbsp;&nbsp; <strong>Cloud:</strong> &nbsp;&nbsp; <strong>Beaufort:</strong> &nbsp;&nbsp; <strong>Feature:</strong></p><blockquote>Journal entry — click to write your observation here.</blockquote><p></p>`;
+  ed.focus();document.execCommand('insertHTML',false,tpl);scheduleTick();
+}
+
+// ── TRIMANGEES EXCLUSIVE: MET GLOSSARY ──
+const MET_TERMS=[
+  {n:'Arcus',d:"Low, horizontal cloud attached to a storm's base — shelf (wide) or roll (tubular) type."},
+  {n:'Anvil (Incus)',d:'Flat spreading top of a Cb cloud, shaped by the tropopause acting as a lid.'},
+  {n:'Ball Lightning',d:'Rare luminous sphere that moves slowly and can pass through walls. Poorly understood.'},
+  {n:'CAPE',d:'Convective Available Potential Energy — measures atmospheric instability in J/kg.'},
+  {n:'Cb (Cumulonimbus)',d:'The classic thunderstorm cloud. Extends from near-surface to tropopause with anvil top.'},
+  {n:'CIN',d:'Convective Inhibition — energy needed to break the capping layer and trigger convection.'},
+  {n:'Dewpoint',d:'Temperature to which air must cool for saturation. Td close to T means high humidity.'},
+  {n:'Downburst',d:'Strong, localised downdraft producing damaging winds at the surface. Sub-4km = microburst.'},
+  {n:'Funnel Cloud',d:'Rotating column extending from cloud base. Only a tornado when it contacts the ground.'},
+  {n:'Hail',d:'Ice pellets ≥5mm formed when updrafts repeatedly carry water droplets above the freezing level.'},
+  {n:'LCL',d:'Lifted Condensation Level — the altitude where rising air becomes saturated (estimated cloud base).'},
+  {n:'LFC',d:'Level of Free Convection — above which a parcel rises freely without external forcing.'},
+  {n:'Mammatus',d:'Pouch-like lobes hanging from a Cb anvil. Indicate turbulent downdraughts inside the cloud.'},
+  {n:'Mesocyclone',d:'Rotating updraft 2–10 km wide inside a supercell. Detected on Doppler radar.'},
+  {n:'Microburst',d:'Intense downdraft under 4km wide producing dangerous outflow winds at the surface.'},
+  {n:'Murus (Wall Cloud)',d:"Isolated lowered portion of a Cb base marking the storm's main updraft zone."},
+  {n:'Pileus',d:'Smooth cap cloud sitting above a rapidly growing Cb top, short-lived as it gets absorbed.'},
+  {n:'Squall Line',d:'Line of active thunderstorms along or ahead of a cold front, extending hundreds of km.'},
+  {n:'Supercell',d:'Organised thunderstorm with a persistent rotating updraft (mesocyclone). Most dangerous storm type.'},
+  {n:'Tuba / Tornado',d:'Violently rotating air column extending from a Cb to the surface. Tuba = not yet surface-connected.'},
+  {n:'Velum',d:'Thin mid-level veil cloud associated with a rising Cb top penetrating a stable layer.'},
+  {n:'Virga',d:'Rain or ice crystals falling from a cloud that evaporate completely before reaching the ground.'},
+];
+function buildMetList(filter){
+  const list=document.getElementById('met-list');list.innerHTML='';
+  const terms=filter?MET_TERMS.filter(t=>t.n.toLowerCase().includes(filter.toLowerCase())||t.d.toLowerCase().includes(filter.toLowerCase())):MET_TERMS;
+  if(!terms.length){list.innerHTML='<div style="padding:12px;font-size:11px;color:rgba(255,255,255,.3)">No matches.</div>';return;}
+  terms.forEach(t=>{
+    const d=document.createElement('div');d.className='met-term';
+    d.innerHTML=`<div class="met-name">${t.n}</div><div class="met-def">${t.d}</div>`;
+    d.onclick=()=>{ed.focus();document.execCommand('insertHTML',false,`<strong>${t.n}</strong> — ${t.d} `);scheduleTick();};
+    list.appendChild(d);
+    d.addEventListener('mouseenter',()=>document.body.classList.add('hovering'));
+    d.addEventListener('mouseleave',()=>document.body.classList.remove('hovering'));
+  });
+}
+function filterMet(q){buildMetList(q);}
+
+// ── FIND & REPLACE ──
+let fIdx=-1,fMatches=[];
+function showFindBar(){document.getElementById('find-bar').style.display='block';setTimeout(()=>document.getElementById('fi').focus(),50);}
+function hideFB(){document.getElementById('find-bar').style.display='none';clearHL();fMatches=[];fIdx=-1;}
+function clearHL(){ed.querySelectorAll('.find-hl,.find-hl-active').forEach(el=>{const p=el.parentNode;if(p){p.replaceChild(document.createTextNode(el.textContent),el);p.normalize();}});}
+function onFindInput(){doFind(document.getElementById('fi').value);}
+function doFind(q){
+  clearHL();fMatches=[];fIdx=-1;
+  if(!q){document.getElementById('find-stat').textContent='';return 0;}
+  const rx=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+  const wk=document.createTreeWalker(ed,NodeFilter.SHOW_TEXT,{acceptNode:n=>n.parentNode&&!n.parentNode.closest('#find-bar')?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_REJECT});
+  const ns=[];let n;while((n=wk.nextNode()))ns.push(n);
+  ns.forEach(node=>{
+    const p=node.parentNode;if(!p)return;
+    const parts=node.textContent.split(rx);if(parts.length<=1)return;
+    const ms=node.textContent.match(rx)||[];
+    const fr=document.createDocumentFragment();
+    parts.forEach((pt,i)=>{if(pt)fr.appendChild(document.createTextNode(pt));if(ms[i]){const s=document.createElement('span');s.className='find-hl';s.textContent=ms[i];fr.appendChild(s);fMatches.push(s);}});
+    p.replaceChild(fr,node);
+  });
+  document.getElementById('find-stat').textContent=fMatches.length?fMatches.length+' match'+(fMatches.length>1?'es':''):'No matches';
+  return fMatches.length;
+}
+function hlMatch(idx){fMatches.forEach((m,i)=>m.className=i===idx?'find-hl-active':'find-hl');if(fMatches[idx])fMatches[idx].scrollIntoView({behavior:'smooth',block:'center'});}
+function fNext(){const q=document.getElementById('fi').value;if(!q)return;if(!fMatches.length)doFind(q);if(!fMatches.length)return;fIdx=(fIdx+1)%fMatches.length;hlMatch(fIdx);}
+function fPrev(){const q=document.getElementById('fi').value;if(!q)return;if(!fMatches.length)doFind(q);if(!fMatches.length)return;fIdx=(fIdx-1+fMatches.length)%fMatches.length;hlMatch(fIdx);}
+function repOne(){const r=document.getElementById('ri').value;if(fIdx>=0&&fMatches[fIdx]){fMatches[fIdx].replaceWith(document.createTextNode(r));fMatches.splice(fIdx,1);if(fIdx>=fMatches.length)fIdx=0;if(fMatches.length)hlMatch(fIdx);else{document.getElementById('find-stat').textContent='No more matches';fIdx=-1;}scheduleTick();}}
+function repAll(){const q=document.getElementById('fi').value,r=document.getElementById('ri').value;if(!q)return;doFind(q);const cnt=fMatches.length;fMatches.forEach(el=>el.replaceWith(document.createTextNode(r)));ed.normalize();fMatches=[];fIdx=-1;document.getElementById('find-stat').textContent=cnt?cnt+' replacement'+(cnt>1?'s':'')+ ' made':'Nothing to replace';scheduleTick();}
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey){
+    switch(e.key){
+      case 's':e.preventDefault();saveLocal();document.getElementById('save-status').textContent='Saved ✓';break;
+      case 'n':e.preventDefault();newDoc();break;
+      case 'o':e.preventDefault();openDoc();break;
+      case 'h':e.preventDefault();showFindBar();break;
+      case '=':case'+':e.preventDefault();zIn();break;
+      case '-':e.preventDefault();zOut();break;
+      case '0':e.preventDefault();zReset();break;
+    }
+  }
+  if(e.key==='Escape'){hideFB();closeDialogs();}
+  if(e.key==='Enter'&&document.getElementById('find-bar').style.display==='block'&&document.activeElement===document.getElementById('fi')){e.preventDefault();fNext();}
+});
+document.getElementById('doc-name').addEventListener('input',function(){document.title=(this.value||'Untitled')+' – Trimangees Docs';});
+ed.addEventListener('input',scheduleTick);
+loadLocal();tick();ed.focus();
+document.addEventListener('contextmenu',e=>e.preventDefault());
+</script>
+</body>
+</html>

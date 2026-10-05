@@ -1,0 +1,34 @@
+{
+  "apps": {
+    "sticky-notes": {
+      "name": "Sticky Notes",
+      "color": "#f0c020",
+      "icon": "N",
+      "storagePath": "apps/sticky-notes.html",
+      "category": "Tools",
+      "pinned": true
+    },
+    "weather-live": {
+      "name": "Weather Live",
+      "color": "#3cc8c8",
+      "icon": "W",
+      "url": "https://your-host.example.com/weather.html",
+      "category": "Tools"
+    },
+    "storm-radar": {
+      "name": "Storm Radar",
+      "color": "#8c6cf0",
+      "icon": "https://your-host.example.com/radar-icon.png",
+      "url": "https://your-host.example.com/radar.html",
+      "category": "Storms"
+    },
+    "old-suite-note": {
+      "name": "TRiDOCS (Netlify)",
+      "color": "#4682dc",
+      "icon": "D",
+      "url": "https://trimangees.netlify.app/tridocs.html",
+      "category": "Suite",
+      "enabled": false
+    }
+  }
+}

@@ -1,0 +1,1032 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TriDB</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg:#0e1015;
+    --surface:#161922;
+    --surface2:#1e222d;
+    --border:#272b38;
+    --text:#e9ebf1;
+    --dim:#868ca0;
+    --dimmer:#565c6f;
+    --accent:#5ee6c7;
+    --accent-soft:rgba(94,230,199,.14);
+    --link:#8b93ff;
+    --danger:#ff6b7a;
+    --danger-soft:rgba(255,107,122,.14);
+    --gold:#f0c674;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    height:100vh;overflow:hidden;font-size:14px;}
+  button, select, input{font-family:inherit;font-size:13px;}
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  /* ---------- Top bar ---------- */
+  #topbar{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--surface);
+    border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .brand{font-size:16px;font-weight:600;letter-spacing:.2px;color:var(--text);white-space:nowrap;}
+  .brand span{color:var(--accent);}
+  #dbControls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;}
+  select, input[type=text], input:not([type]){background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:7px 10px;border-radius:var(--radius);}
+  select:hover, .btn:hover{border-color:var(--accent);}
+  input#customUrl{min-width:220px;display:none;}
+  input#rootPath{width:100px;}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:7px 14px;border-radius:var(--radius);cursor:pointer;white-space:nowrap;}
+  .btn:hover{filter:brightness(1.15);}
+  .btn.primary{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
+  .btn.danger{background:var(--danger-soft);border-color:var(--danger);color:var(--danger);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;filter:none;}
+  #status{font-size:12px;padding:4px 12px;border-radius:20px;background:var(--surface2);color:var(--dim);white-space:nowrap;}
+  #status.on{background:var(--accent-soft);color:var(--accent);}
+  #status.off{background:var(--danger-soft);color:var(--danger);}
+
+  #tabs{display:flex;gap:4px;background:var(--surface2);padding:3px;border-radius:10px;}
+  .tabBtn{background:transparent;border:none;color:var(--dim);padding:7px 16px;border-radius:8px;cursor:pointer;font-size:13px;}
+  .tabBtn.active{background:var(--surface);color:var(--text);}
+
+  .panel{display:none;flex:1;overflow:hidden;flex-direction:column;}
+  .panel.active{display:flex;}
+
+  /* ---------- Browse panel ---------- */
+  #browseToolbar{display:flex;align-items:center;gap:8px;padding:10px 20px;border-bottom:1px solid var(--border);}
+  #browseToolbar .hint{font-size:12px;color:var(--dimmer);}
+
+  #main{flex:1;display:flex;overflow:hidden;}
+  #treePane{width:320px;border-right:1px solid var(--border);display:flex;flex-direction:column;background:var(--surface);}
+  #searchBar{padding:10px;border-bottom:1px solid var(--border);}
+  #searchBar input{width:100%;background:var(--bg);}
+  #tree{flex:1;overflow:auto;padding:6px;font-size:13px;}
+  .node{margin:1px 0;}
+  .node-row{display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;}
+  .node-row:hover{background:var(--surface2);}
+  .node-row.selected{background:rgba(139,147,255,.16);}
+  .caret{width:12px;color:var(--dimmer);display:inline-block;text-align:center;transition:transform .12s;font-size:9px;}
+  .caret.open{transform:rotate(90deg);}
+  .key{color:var(--link);font-weight:500;}
+  .leafval{color:var(--dim);font-style:italic;margin-left:2px;overflow:hidden;text-overflow:ellipsis;max-width:130px;}
+  .children{margin-left:15px;border-left:1px solid var(--border);padding-left:8px;}
+  .badge{font-size:10px;color:var(--gold);margin-left:2px;}
+
+  #detailPane{flex:1;display:flex;flex-direction:column;padding:20px;overflow:auto;}
+  #pathBar{font-size:12px;color:var(--dim);margin-bottom:12px;word-break:break-all;font-family:Consolas,monospace;}
+  #pathBar b{color:var(--accent);font-weight:500;}
+  #editor{flex:1;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    color:var(--text);font-family:'Cascadia Code',Consolas,monospace;font-size:13px;padding:14px;resize:none;line-height:1.5;}
+  #editor:focus{outline:none;border-color:var(--accent);}
+  .toolbar{display:flex;gap:8px;margin:12px 0 0;flex-wrap:wrap;}
+  #msg{font-size:12px;margin-top:10px;min-height:16px;}
+  #msg.ok{color:var(--accent);}
+  #msg.err{color:var(--danger);}
+  #empty{margin:40px auto;color:var(--dimmer);font-size:13px;text-align:center;max-width:220px;}
+  #addRow{display:flex;gap:8px;margin-top:12px;}
+  #addRow input{flex:1;background:var(--bg);}
+
+  /* ---------- Sync panel ---------- */
+  #panel-sync{overflow:auto;padding:24px 28px;gap:22px;}
+  .syncSection{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;max-width:760px;}
+  .syncSection h2{font-size:13px;font-weight:600;margin:0 0 4px;color:var(--text);}
+  .syncSection .sub{font-size:12px;color:var(--dimmer);margin-bottom:14px;}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
+  .row:last-child{margin-bottom:0;}
+  label.check{display:flex;align-items:center;gap:6px;color:var(--dim);cursor:pointer;font-size:13px;}
+  .folderName{color:var(--dim);font-size:12px;}
+  .profileRow{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:13px;border-bottom:1px solid var(--border);}
+  .profileRow:last-child{border-bottom:none;}
+  .profileRow .host{flex:1;color:var(--text);font-family:Consolas,monospace;font-size:12px;}
+  .profileStatus{color:var(--dimmer);font-size:11px;min-width:100px;text-align:right;}
+  #syncLog{max-height:200px;overflow:auto;font-family:Consolas,monospace;font-size:11px;color:var(--dim);
+    background:var(--bg);border-radius:var(--radius);padding:10px 12px;margin-top:8px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div class="brand">Tri<span>DB</span></div>
+    <div id="dbControls">
+      <select id="dbSelect">
+        <option value="mysterysolver-trimangees-default-rtdb.firebaseio.com">mysterysolver (current)</option>
+        <option value="firepass-a0a81-default-rtdb.firebaseio.com">firepass-a0a81 (legacy)</option>
+        <option value="__custom__">Custom URL...</option>
+      </select>
+      <input id="customUrl" placeholder="yourproject-default-rtdb.firebaseio.com">
+      <button id="btnConnect" class="btn primary">Connect</button>
+      <span id="status" class="off">disconnected</span>
+    </div>
+    <div id="tabs">
+      <button class="tabBtn active" data-tab="browse">Browse</button>
+      <button class="tabBtn" data-tab="sync">Sync</button>
+    </div>
+  </div>
+
+  <div id="panel-browse" class="panel active">
+    <div id="browseToolbar">
+      <input id="rootPath" placeholder="/ (root path)" value="/">
+      <button id="btnRefresh" class="btn">Refresh</button>
+      <button id="btnBuildIndex" class="btn" title="One-time: reads everything once, then writes a lightweight key index so future connects are fast">Build Index</button>
+      <button id="btnExport" class="btn">Export JSON</button>
+      <span class="hint">Pick a database above, hit Connect, then browse the tree on the left.</span>
+    </div>
+    <div id="main">
+      <div id="treePane">
+        <div id="searchBar"><input id="search" placeholder="Filter keys..."></div>
+        <div id="tree"><div id="empty">Pick a database above and hit Connect.</div></div>
+      </div>
+      <div id="detailPane">
+        <div id="pathBar">Select a node from the tree once connected.</div>
+        <textarea id="editor" placeholder="Node JSON will appear here..." spellcheck="false"></textarea>
+        <div id="addRow" style="display:none;">
+          <input id="newKey" placeholder="new child key">
+          <input id="newVal" placeholder='value (JSON, e.g. "text", 5, true, {"a":1})'>
+          <button id="btnAddChild" class="btn">Add Child</button>
+        </div>
+        <div class="toolbar">
+          <button id="btnSave" class="btn primary" disabled>Save Node</button>
+          <button id="btnDelete" class="btn danger" disabled>Delete Node</button>
+          <button id="btnReload" class="btn" disabled>Reload Node</button>
+        </div>
+        <div id="msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-sync" class="panel" style="display:none;">
+    <div class="syncSection">
+      <h2>Quick sync — current database</h2>
+      <div class="sub">Backs up whichever database is connected above to a folder on your pendrive, and keeps it current for as long as this window stays open.</div>
+      <div class="row">
+        <button id="btnChooseFolder" class="btn">Choose Sync Folder</button>
+        <span id="syncFolderName" class="folderName">no folder chosen</span>
+        <button id="btnSyncNow" class="btn">Sync Now</button>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="autoSync" checked> auto-sync on connect</label>
+        <label class="check"><input type="checkbox" id="bgSync" checked> keep syncing every</label>
+        <select id="bgInterval">
+          <option value="2">2 min</option>
+          <option value="5" selected>5 min</option>
+          <option value="10">10 min</option>
+          <option value="30">30 min</option>
+        </select>
+        <span id="bgStatus" class="folderName">not started</span>
+      </div>
+    </div>
+
+    <div class="syncSection">
+      <h2>Background databases</h2>
+      <div class="sub">Synced on the interval above, independent of whichever database is selected in Browse.</div>
+      <div id="profileRows"></div>
+      <div class="row" style="margin-top:12px;">
+        <input id="newProfileHost" placeholder="another-project-default-rtdb.firebaseio.com" style="flex:1;background:var(--bg);">
+        <button id="btnAddProfile" class="btn">Add Database</button>
+      </div>
+    </div>
+
+    <div class="syncSection">
+      <h2>Activity log</h2>
+      <div class="sub">What the sync engine has actually done, most recent at the bottom.</div>
+      <button id="btnToggleLog" style="display:none;"></button>
+      <div id="syncLog"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+
+let dbHost = null, rootPathStr = "/", selectedPath = null;
+let dbInstance = null, bgTimer = null;
+
+const el = id => document.getElementById(id);
+const statusEl = el('status'), treeEl = el('tree'), editor = el('editor'),
+      pathBar = el('pathBar'), msg = el('msg'), addRow = el('addRow');
+
+// Remember last choice
+try{
+  const savedHost = localStorage.getItem('tridb_host');
+  const savedCustom = localStorage.getItem('tridb_custom');
+  const savedRoot = localStorage.getItem('tridb_root');
+  if(savedHost){
+    el('dbSelect').value = savedHost;
+    if(savedHost === '__custom__' && savedCustom){ el('customUrl').value = savedCustom; }
+  }
+  if(savedRoot) el('rootPath').value = savedRoot;
+}catch(e){}
+
+el('dbSelect').addEventListener('change', () => {
+  el('customUrl').style.display = el('dbSelect').value === '__custom__' ? 'inline-block' : 'none';
+});
+if(el('dbSelect').value === '__custom__'){ el('customUrl').style.display = 'inline-block'; }
+
+function currentHost(){
+  const sel = el('dbSelect').value;
+  if(sel === '__custom__'){
+    return el('customUrl').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  }
+  return sel;
+}
+
+el('btnConnect').onclick = () => {
+  const host = currentHost();
+  if(!host){ setStatus(false,'no URL given'); return; }
+  dbHost = host;
+  rootPathStr = el('rootPath').value.trim() || '/';
+  try{
+    localStorage.setItem('tridb_host', el('dbSelect').value);
+    localStorage.setItem('tridb_custom', el('customUrl').value);
+    localStorage.setItem('tridb_root', rootPathStr);
+  }catch(e){}
+  try{
+    if(firebase.apps.length){ firebase.apps.forEach(a => a.delete()); }
+    firebase.initializeApp({ databaseURL: 'https://' + dbHost });
+    dbInstance = firebase.database();
+    loadTree();
+  }catch(e){
+    setStatus(false, 'error');
+    treeEl.innerHTML = '<div id="empty" style="margin-top:40px;color:var(--warn);">'+e.message+'</div>';
+  }
+};
+
+function setStatus(on, text){
+  statusEl.className = on ? 'on' : 'off';
+  statusEl.textContent = text;
+}
+
+const INDEX_KEY = '_tridb_index';
+let dirHandle = null;
+let offlineMode = false;
+
+// ---------- IndexedDB helpers for persisting the folder handle ----------
+function idbTx(mode){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('tridb-fs', 1);
+    req.onupgradeneeded = () => { if(!req.result.objectStoreNames.contains('handles')) req.result.createObjectStore('handles'); };
+    req.onsuccess = () => resolve(req.result.transaction('handles', mode).objectStore('handles'));
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbSet(key, val){ const store = await idbTx('readwrite'); return new Promise((res,rej)=>{ const r=store.put(val,key); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error); }); }
+async function idbGet(key){ const store = await idbTx('readonly'); return new Promise((res,rej)=>{ const r=store.get(key); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+
+function logSync(text){
+  const line = document.createElement('div');
+  line.textContent = new Date().toLocaleTimeString() + '  ' + text;
+  el('syncLog').appendChild(line);
+  el('syncLog').scrollTop = el('syncLog').scrollHeight;
+}
+
+el('btnToggleLog').onclick = () => {
+  const showing = el('syncLog').style.display !== 'none';
+  el('syncLog').style.display = showing ? 'none' : 'block';
+  el('btnToggleLog').textContent = showing ? 'Show Sync Log' : 'Hide Sync Log';
+};
+
+el('btnChooseFolder').onclick = async () => {
+  try{
+    dirHandle = await window.showDirectoryPicker();
+    await idbSet('syncDir', dirHandle);
+    el('syncFolderName').textContent = dirHandle.name;
+    logSync('Sync folder set to "' + dirHandle.name + '".');
+  }catch(e){
+    logSync('Folder selection cancelled: ' + e.message);
+  }
+};
+
+(async () => {
+  try{
+    const saved = await idbGet('syncDir');
+    if(saved){
+      const perm = await saved.queryPermission({mode:'readwrite'});
+      if(perm === 'granted'){
+        dirHandle = saved;
+        el('syncFolderName').textContent = dirHandle.name + ' (restored)';
+      } else {
+        el('syncFolderName').textContent = '"' + saved.name + '" — click Choose Sync Folder to reauthorize';
+      }
+    }
+  }catch(e){ /* no saved handle yet, fine */ }
+})();
+
+// ---------- File helpers ----------
+async function readJSONFile(dir, filename){
+  try{
+    const fh = await dir.getFileHandle(filename);
+    const file = await fh.getFile();
+    return JSON.parse(await file.text());
+  }catch(e){ return undefined; }
+}
+async function writeJSONFile(dir, filename, data){
+  const fh = await dir.getFileHandle(filename, {create:true});
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify(data === undefined ? null : data, null, 2));
+  await w.close();
+}
+async function listLocalKeys(dir){
+  const keys = [];
+  for await (const [name, handle] of dir.entries()){
+    if(handle.kind === 'file' && name.endsWith('.json') && !name.startsWith('.')){
+      keys.push(name.slice(0, -5));
+    }
+  }
+  return keys;
+}
+async function getMetaDir(){
+  return await dirHandle.getDirectoryHandle('.tridb-meta', {create:true});
+}
+
+// ---------- Sync engine ----------
+el('btnSyncNow').onclick = () => syncNow();
+
+async function syncNow(){
+  if(!dirHandle){ logSync('Choose a sync folder first.'); return; }
+  if(!dbInstance){ logSync('Not connected to Firebase — nothing to sync against right now.'); return; }
+  logSync('--- sync started ---');
+  let keys;
+  try{
+    const idxSnap = await dbRef(scopedPath(INDEX_KEY)).once('value');
+    const idx = idxSnap.val();
+    if(idx && typeof idx === 'object'){
+      keys = Object.keys(idx);
+    } else {
+      logSync('No Firebase index yet — reading root once to discover keys (also builds the index).');
+      const rootSnap = await dbRef(scopedPath('')).once('value');
+      const rootVal = rootSnap.val() || {};
+      keys = Object.keys(rootVal).filter(k => k !== INDEX_KEY);
+      const newIdx = {}; keys.forEach(k => newIdx[k] = true);
+      await dbRef(scopedPath(INDEX_KEY)).set(newIdx);
+    }
+  }catch(e){
+    logSync('Could not reach Firebase for sync (' + e.message + '). Local pendrive copy is untouched.');
+    return;
+  }
+  const localKeys = await listLocalKeys(dirHandle);
+  const allKeys = new Set([...keys, ...localKeys]);
+  const metaDir = await getMetaDir();
+  for(const key of allKeys){
+    await syncKey(key, metaDir);
+  }
+  logSync('--- sync complete ---');
+}
+
+async function syncKey(key, metaDir){
+  const filename = key + '.json';
+  const localVal = await readJSONFile(dirHandle, filename);
+  const baseline = await readJSONFile(metaDir, filename);
+
+  let remoteVal, remoteReachable = true;
+  try{
+    const snap = await dbRef(scopedPath(key)).once('value');
+    remoteVal = snap.val();
+  }catch(e){
+    remoteReachable = false;
+  }
+  if(!remoteReachable){
+    logSync(key + ': could not read from Firebase, skipped.');
+    return;
+  }
+
+  const localStr = JSON.stringify(localVal === undefined ? null : localVal);
+  const remoteStr = JSON.stringify(remoteVal === undefined ? null : remoteVal);
+  const baseStr = baseline === undefined ? undefined : JSON.stringify(baseline);
+
+  if(localStr === remoteStr){
+    if(baseStr !== localStr) await writeJSONFile(metaDir, filename, remoteVal);
+    return; // up to date, no log spam
+  }
+
+  if(baseStr === undefined){
+    if(localVal === undefined){
+      await writeJSONFile(dirHandle, filename, remoteVal);
+      await writeJSONFile(metaDir, filename, remoteVal);
+      logSync(key + ': pulled from Firebase (new locally).');
+    } else if(remoteVal === undefined || remoteVal === null){
+      await dbRef(scopedPath(key)).set(localVal);
+      await writeJSONFile(metaDir, filename, localVal);
+      logSync(key + ': pushed to Firebase (new remotely).');
+    } else {
+      await writeJSONFile(dirHandle, key + '.remote-conflict.json', remoteVal);
+      logSync(key + ': CONFLICT (no sync history, differs both sides) — local kept, Firebase copy saved as "' + key + '.remote-conflict.json".');
+    }
+    return;
+  }
+
+  if(localStr === baseStr){
+    await writeJSONFile(dirHandle, filename, remoteVal);
+    await writeJSONFile(metaDir, filename, remoteVal);
+    logSync(key + ': pulled updates from Firebase.');
+  } else if(remoteStr === baseStr){
+    await dbRef(scopedPath(key)).set(localVal);
+    await writeJSONFile(metaDir, filename, localVal);
+    logSync(key + ': pushed local changes to Firebase.');
+  } else {
+    await writeJSONFile(dirHandle, key + '.remote-conflict.json', remoteVal);
+    logSync(key + ': CONFLICT — both sides changed since last sync. Local kept as-is; Firebase copy saved as "' + key + '.remote-conflict.json" to merge by hand.');
+  }
+}
+
+// ---------- Multi-database background sync (independent of whichever DB is selected above) ----------
+let syncProfiles = [];
+const namedDbInstances = {};
+
+function sanitizeAppName(host){ return 'sync_' + host.replace(/[^a-zA-Z0-9]/g, '_'); }
+
+async function loadProfiles(){
+  let saved = await idbGet('syncProfiles_list');
+  if(!saved){
+    saved = [
+      {host: 'mysterysolver-trimangees-default-rtdb.firebaseio.com', enabled: false},
+      {host: 'firepass-a0a81-default-rtdb.firebaseio.com', enabled: false}
+    ];
+  }
+  for(const p of saved){
+    p.dirHandle = await idbGet('profileDir_' + p.host) || null;
+    p.permGranted = false;
+    if(p.dirHandle){
+      try{ p.permGranted = (await p.dirHandle.queryPermission({mode:'readwrite'})) === 'granted'; }
+      catch(e){ p.permGranted = false; }
+    }
+  }
+  syncProfiles = saved;
+  renderProfileRows();
+}
+
+async function saveProfilesList(){
+  await idbSet('syncProfiles_list', syncProfiles.map(p => ({host: p.host, enabled: p.enabled})));
+}
+
+function renderProfileRows(){
+  const container = el('profileRows');
+  container.innerHTML = '';
+  syncProfiles.forEach((p, idx) => {
+    const safeId = sanitizeAppName(p.host);
+    const needsAuth = p.dirHandle && !p.permGranted;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;';
+    row.innerHTML =
+      '<input type="checkbox" ' + (p.enabled ? 'checked' : '') + ' data-idx="' + idx + '" class="profEnabled">' +
+      '<span style="flex:1;color:var(--text);">' + p.host + '</span>' +
+      (needsAuth
+        ? '<button data-idx="' + idx + '" class="profReauth" style="border-color:var(--danger);color:var(--danger);">Reauthorize</button>'
+        : '<button data-idx="' + idx + '" class="profChooseFolder">Choose Folder</button>') +
+      '<span style="color:var(--dim);min-width:120px;">' + (p.dirHandle ? p.dirHandle.name : 'no folder') + '</span>' +
+      '<span id="profStatus_' + safeId + '" style="color:' + (needsAuth ? 'var(--danger)' : 'var(--dim)') + ';min-width:130px;">' +
+        (needsAuth ? 'needs reauthorization' : 'idle') + '</span>' +
+      '<button data-idx="' + idx + '" class="profRemove">✕</button>';
+    container.appendChild(row);
+  });
+  container.querySelectorAll('.profEnabled').forEach(cb => {
+    cb.onchange = async (e) => {
+      const i = +e.target.dataset.idx;
+      syncProfiles[i].enabled = e.target.checked;
+      await saveProfilesList();
+      if(e.target.checked) backgroundTick();
+    };
+  });
+  container.querySelectorAll('.profChooseFolder').forEach(btn => {
+    btn.onclick = async (e) => {
+      const i = +e.target.dataset.idx;
+      try{
+        const handle = await window.showDirectoryPicker();
+        syncProfiles[i].dirHandle = handle;
+        syncProfiles[i].permGranted = true;
+        await idbSet('profileDir_' + syncProfiles[i].host, handle);
+        renderProfileRows();
+        backgroundTick();
+      }catch(err){ /* cancelled */ }
+    };
+  });
+  container.querySelectorAll('.profReauth').forEach(btn => {
+    btn.onclick = async (e) => {
+      const i = +e.target.dataset.idx;
+      try{
+        const perm = await syncProfiles[i].dirHandle.requestPermission({mode: 'readwrite'});
+        syncProfiles[i].permGranted = (perm === 'granted');
+        renderProfileRows();
+        if(syncProfiles[i].permGranted) backgroundTick();
+      }catch(err){
+        logSync(syncProfiles[i].host + ': reauthorization failed — ' + err.message);
+      }
+    };
+  });
+  container.querySelectorAll('.profRemove').forEach(btn => {
+    btn.onclick = async (e) => {
+      const i = +e.target.dataset.idx;
+      syncProfiles.splice(i, 1);
+      await saveProfilesList();
+      renderProfileRows();
+    };
+  });
+}
+
+el('btnAddProfile').onclick = async () => {
+  const host = el('newProfileHost').value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+  if(!host) return;
+  syncProfiles.push({host, enabled: true, dirHandle: null});
+  await saveProfilesList();
+  el('newProfileHost').value = '';
+  renderProfileRows();
+};
+
+loadProfiles().then(scheduleBackground);
+
+function updateProfileStatus(host, text){
+  const s = el('profStatus_' + sanitizeAppName(host));
+  if(s) s.textContent = text;
+}
+
+async function getNamedDb(host){
+  if(namedDbInstances[host]) return namedDbInstances[host];
+  const appName = sanitizeAppName(host);
+  let app;
+  try{ app = firebase.app(appName); }
+  catch(e){ app = firebase.initializeApp({databaseURL: 'https://' + host}, appName); }
+  const inst = app.database();
+  namedDbInstances[host] = inst;
+  return inst;
+}
+
+async function syncProfileNow(dbInst, dirH, hostLabel){
+  let keys;
+  const idxSnap = await dbInst.ref(INDEX_KEY).once('value');
+  const idx = idxSnap.val();
+  if(idx && typeof idx === 'object'){
+    keys = Object.keys(idx);
+  } else {
+    const rootSnap = await dbInst.ref().once('value');
+    const rootVal = rootSnap.val() || {};
+    keys = Object.keys(rootVal).filter(k => k !== INDEX_KEY);
+    const newIdx = {}; keys.forEach(k => newIdx[k] = true);
+    await dbInst.ref(INDEX_KEY).set(newIdx);
+  }
+  const localKeys = await listLocalKeys(dirH);
+  const allKeys = new Set([...keys, ...localKeys]);
+  const metaDir = await dirH.getDirectoryHandle('.tridb-meta', {create: true});
+  for(const key of allKeys){
+    await syncKeyGeneric(dbInst, dirH, metaDir, key, hostLabel);
+  }
+}
+
+async function syncKeyGeneric(dbInst, dirH, metaDir, key, hostLabel){
+  const filename = key + '.json';
+  const localVal = await readJSONFile(dirH, filename);
+  const baseline = await readJSONFile(metaDir, filename);
+  const snap = await dbInst.ref(key).once('value');
+  const remoteVal = snap.val();
+
+  const localStr = JSON.stringify(localVal === undefined ? null : localVal);
+  const remoteStr = JSON.stringify(remoteVal === undefined ? null : remoteVal);
+  const baseStr = baseline === undefined ? undefined : JSON.stringify(baseline);
+
+  if(localStr === remoteStr){
+    if(baseStr !== localStr) await writeJSONFile(metaDir, filename, remoteVal);
+    return;
+  }
+  if(baseStr === undefined){
+    if(localVal === undefined){
+      await writeJSONFile(dirH, filename, remoteVal);
+      await writeJSONFile(metaDir, filename, remoteVal);
+      logSync('[' + hostLabel + '] ' + key + ': pulled (new locally).');
+    } else if(remoteVal === undefined || remoteVal === null){
+      await dbInst.ref(key).set(localVal);
+      await writeJSONFile(metaDir, filename, localVal);
+      logSync('[' + hostLabel + '] ' + key + ': pushed (new remotely).');
+    } else {
+      await writeJSONFile(dirH, key + '.remote-conflict.json', remoteVal);
+      logSync('[' + hostLabel + '] ' + key + ': CONFLICT (no history) — local kept, remote saved as conflict file.');
+    }
+    return;
+  }
+  if(localStr === baseStr){
+    await writeJSONFile(dirH, filename, remoteVal);
+    await writeJSONFile(metaDir, filename, remoteVal);
+    logSync('[' + hostLabel + '] ' + key + ': pulled updates.');
+  } else if(remoteStr === baseStr){
+    await dbInst.ref(key).set(localVal);
+    await writeJSONFile(metaDir, filename, localVal);
+    logSync('[' + hostLabel + '] ' + key + ': pushed local changes.');
+  } else {
+    await writeJSONFile(dirH, key + '.remote-conflict.json', remoteVal);
+    logSync('[' + hostLabel + '] ' + key + ': CONFLICT — both changed, remote saved as conflict file.');
+  }
+}
+
+// ---------- Background auto-sync (keeps running as long as this window/tab exists, even minimized) ----------
+
+function scheduleBackground(){
+  if(bgTimer){ clearInterval(bgTimer); bgTimer = null; }
+  if(!el('bgSync').checked) { el('bgStatus').textContent = 'background sync off'; return; }
+  const minutes = parseInt(el('bgInterval').value, 10) || 5;
+  backgroundTick(); // run immediately — don't make the user wait a full interval for the first check
+  bgTimer = setInterval(backgroundTick, minutes * 60 * 1000);
+}
+
+el('bgSync').addEventListener('change', scheduleBackground);
+el('bgInterval').addEventListener('change', scheduleBackground);
+
+async function backgroundTick(){
+  const stamp = new Date().toLocaleTimeString();
+  if(dbHost){
+    try{
+      if(!dbInstance) throw new Error('no db instance');
+      await dbRef(scopedPath(INDEX_KEY)).once('value');
+      if(offlineMode){
+        logSync('Background check: Firebase back online — switching out of offline mode.');
+        loadTree();
+      } else if(dirHandle){
+        await syncNow();
+      }
+      el('bgStatus').textContent = 'last check ok @ ' + stamp;
+    }catch(e){
+      if(!offlineMode){
+        logSync('Background check: Firebase unreachable (' + e.message + ') — switching to local pendrive copy.');
+        renderOfflineTree();
+      }
+      el('bgStatus').textContent = 'offline since ' + stamp;
+    }
+  } else {
+    el('bgStatus').textContent = 'idle (not connected yet)';
+  }
+
+  // Multi-database background sync, independent of whichever DB is selected above
+  for(const p of syncProfiles){
+    if(!p.enabled || !p.dirHandle) continue;
+    if(!p.permGranted){
+      updateProfileStatus(p.host, 'needs reauthorization');
+      continue;
+    }
+    try{
+      const inst = await getNamedDb(p.host);
+      await syncProfileNow(inst, p.dirHandle, p.host);
+      updateProfileStatus(p.host, 'synced @ ' + stamp);
+    }catch(e){
+      updateProfileStatus(p.host, 'error: ' + e.message);
+    }
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  // Minimizing/hiding a tab does NOT stop its JS — this just logs the transition for clarity.
+  if(document.hidden){ logSync('Window hidden/minimized — background sync keeps running.'); }
+  else { logSync('Window visible again.'); }
+});
+
+// ---------- Offline fallback tree (reads local pendrive copies when Firebase is unreachable) ----------
+async function renderOfflineTree(){
+  offlineMode = true;
+  setStatus(false, 'OFFLINE — showing local pendrive copy');
+  treeEl.innerHTML = '';
+  if(!dirHandle){
+    treeEl.innerHTML = '<div id="empty" style="margin-top:40px;color:var(--warn);">Firebase unreachable and no sync folder chosen — nothing to show.</div>';
+    return;
+  }
+  const keys = await listLocalKeys(dirHandle);
+  if(keys.length === 0){
+    treeEl.innerHTML = '<div id="empty" style="margin-top:40px;">Firebase unreachable — local folder has no synced copies yet.</div>';
+    return;
+  }
+  for(const key of keys){
+    const val = await readJSONFile(dirHandle, key + '.json');
+    treeEl.appendChild(buildNode(key + ' (local)', val, key));
+  }
+  el('btnSave').disabled = true;
+  el('btnDelete').disabled = true;
+  el('btnAddChild').disabled = true;
+  msg.textContent = '';
+}
+
+function scopedPath(sub){
+  const root = rootPathStr === '/' ? '' : rootPathStr.replace(/^\/|\/$/g,'');
+  return [root, sub].filter(Boolean).join('/');
+}
+function dbRef(path){
+  return path ? dbInstance.ref(path) : dbInstance.ref();
+}
+
+function loadTree(){
+  setStatus(false, 'checking for index...');
+  offlineMode = false;
+  dbRef(scopedPath(INDEX_KEY)).once('value')
+    .then(snap => {
+      const idx = snap.val();
+      treeEl.innerHTML = '';
+      if(idx && typeof idx === 'object'){
+        setStatus(true, 'connected (indexed): ' + dbHost);
+        Object.keys(idx).forEach(k => {
+          treeEl.appendChild(buildLazyNode(k, scopedPath(k)));
+        });
+      } else {
+        setStatus(true, 'connected, no index yet: ' + dbHost);
+        treeEl.appendChild(buildLazyNode('(root — click to load everything under this path)', scopedPath(''), true));
+      }
+      el('btnSave').disabled = false;
+      el('btnDelete').disabled = false;
+      el('btnAddChild').disabled = false;
+      if(el('autoSync').checked && dirHandle){ syncNow(); }
+      scheduleBackground();
+    })
+    .catch(e => {
+      logSync('Firebase unreachable on connect (' + e.message + ') — falling back to local pendrive copy.');
+      renderOfflineTree();
+    });
+}
+
+el('btnBuildIndex').onclick = () => {
+  if(!dbInstance){ showMsg('Connect first.', true); return; }
+  if(!confirm('This does a one-time full read of everything under the current root path, then writes a small "'+INDEX_KEY+'" node listing the top-level keys. Continue?')) return;
+  setStatus(false, 'building index (full read in progress)...');
+  dbRef(scopedPath('')).once('value').then(snap => {
+    const val = snap.val();
+    if(val === null || typeof val !== 'object'){
+      showMsg('Nothing object-like at this root path to index.', true);
+      setStatus(true, 'connected: ' + dbHost);
+      return;
+    }
+    const idx = {};
+    Object.keys(val).forEach(k => { if(k !== INDEX_KEY) idx[k] = true; });
+    dbRef(scopedPath(INDEX_KEY)).set(idx).then(() => {
+      showMsg('Index built (' + Object.keys(idx).length + ' top-level keys). Reconnect/refresh to use it.', false);
+      setStatus(true, 'connected: ' + dbHost);
+      loadTree();
+    }).catch(e => showMsg('Failed to write index: ' + e.message, true));
+  }).catch(e => {
+    setStatus(false, 'error');
+    showMsg('Full read failed: ' + e.message, true);
+  });
+};
+
+function buildLazyNode(key, fullPath, forceFullLoad){
+  const wrap = document.createElement('div');
+  wrap.className = 'node';
+  const row = document.createElement('div');
+  row.className = 'node-row';
+  row.dataset.path = fullPath;
+  const caret = document.createElement('span');
+  caret.className = 'caret';
+  caret.textContent = '▶';
+  row.appendChild(caret);
+  const keyEl = document.createElement('span');
+  keyEl.className = 'key';
+  keyEl.textContent = key;
+  row.appendChild(keyEl);
+  const badge = document.createElement('span');
+  badge.className = 'badge';
+  badge.textContent = 'click to load';
+  row.appendChild(badge);
+  wrap.appendChild(row);
+
+  let loaded = false, loadedValue, childrenEl = null;
+
+  function fetchAndExpand(){
+    if(loaded){
+      const open = childrenEl.style.display !== 'none';
+      childrenEl.style.display = open ? 'none' : 'block';
+      caret.classList.toggle('open', !open);
+      return;
+    }
+    badge.textContent = 'loading...';
+    dbRef(fullPath).once('value').then(snap => {
+      loadedValue = snap.val();
+      loaded = true;
+      if(loadedValue !== null && typeof loadedValue === 'object'){
+        const keys = Object.keys(loadedValue);
+        const count = keys.length;
+        badge.textContent = count + (count===1?' key':' keys');
+        childrenEl = document.createElement('div');
+        childrenEl.className = 'children';
+        keys.forEach(k => {
+          childrenEl.appendChild(buildNode(k, loadedValue[k], fullPath + '/' + k));
+        });
+        wrap.appendChild(childrenEl);
+        caret.classList.add('open');
+      } else {
+        badge.textContent = '';
+        caret.textContent = ' ';
+        const leaf = document.createElement('span');
+        leaf.className = 'leafval';
+        leaf.textContent = truncateLeaf(loadedValue);
+        row.appendChild(leaf);
+      }
+    }).catch(e => { badge.textContent = 'error: ' + e.message; });
+  }
+
+  caret.onclick = (e) => { e.stopPropagation(); fetchAndExpand(); };
+  row.onclick = () => {
+    if(!loaded) fetchAndExpand();
+    setTimeout(() => selectNode(fullPath, loadedValue, row), loaded ? 0 : 400);
+  };
+  return wrap;
+}
+
+el('btnRefresh').onclick = () => { if(dbHost) loadTree(); };
+
+el('btnExport').onclick = () => {
+  if(!dbInstance){ showMsg('Connect first.', true); return; }
+  if(!confirm('This does a full read of everything under the current root path before exporting — may be slow if it contains large embedded files. Continue?')) return;
+  showMsg('Reading full tree for export...', false);
+  dbRef(scopedPath('')).once('value').then(snap => {
+    const blob = new Blob([JSON.stringify(snap.val(), null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'tridb-export.json';
+    a.click();
+    showMsg('Exported.', false);
+  }).catch(e => showMsg('Export failed: ' + e.message, true));
+};
+
+function buildNode(key, value, path){
+  const isObj = value !== null && typeof value === 'object';
+  const wrap = document.createElement('div');
+  wrap.className = 'node';
+
+  const row = document.createElement('div');
+  row.className = 'node-row';
+  row.dataset.path = path;
+
+  const caret = document.createElement('span');
+  caret.className = 'caret';
+  caret.textContent = isObj ? '▶' : ' ';
+  row.appendChild(caret);
+
+  const keyEl = document.createElement('span');
+  keyEl.className = 'key';
+  keyEl.textContent = key;
+  row.appendChild(keyEl);
+
+  if(isObj){
+    const count = Object.keys(value).length;
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = count + (count===1?' key':' keys');
+    row.appendChild(badge);
+  } else {
+    const leaf = document.createElement('span');
+    leaf.className = 'leafval';
+    leaf.textContent = truncateLeaf(value);
+    row.appendChild(leaf);
+  }
+
+  wrap.appendChild(row);
+
+  if(isObj){
+    let childrenEl = null;
+    let built = false;
+    caret.onclick = (e) => {
+      e.stopPropagation();
+      if(!built){
+        childrenEl = document.createElement('div');
+        childrenEl.className = 'children';
+        Object.keys(value).forEach(k => {
+          childrenEl.appendChild(buildNode(k, value[k], path ? path + '/' + k : k));
+        });
+        wrap.appendChild(childrenEl);
+        built = true;
+      }
+      const open = childrenEl.style.display !== 'none';
+      childrenEl.style.display = open ? 'none' : 'block';
+      caret.classList.toggle('open', !open);
+    };
+  }
+
+  row.onclick = () => selectNode(path, value, row);
+  return wrap;
+}
+
+function truncateLeaf(value){
+  const s = JSON.stringify(value);
+  if(s === undefined) return '';
+  if(s.length > 80){
+    return s.slice(0, 77) + '... (' + s.length + ' chars)';
+  }
+  return s;
+}
+
+function selectNode(path, value, rowEl){
+  document.querySelectorAll('.node-row.selected').forEach(r => r.classList.remove('selected'));
+  if(rowEl) rowEl.classList.add('selected');
+  selectedPath = path;
+  pathBar.innerHTML = 'Path: <b>' + dbHost + '/' + path + '</b>';
+
+  const full = JSON.stringify(value, null, 2);
+  if(full && full.length > 20000){
+    editor.value = '(value is ' + full.length + ' chars — likely embedded file/image data)\n\nLoad it into the editor anyway?';
+    editor.readOnly = true;
+    el('btnSave').disabled = true;
+    showMsg('Large value — click "Reload Node" to load it fully if you really need to edit it.', false);
+  } else {
+    editor.readOnly = false;
+    editor.value = full;
+    el('btnSave').disabled = false;
+  }
+  el('btnDelete').disabled = false;
+  el('btnReload').disabled = false;
+  addRow.style.display = (value !== null && typeof value === 'object') ? 'flex' : 'none';
+  if(full && full.length <= 20000) msg.textContent = '';
+}
+
+function refForSelected(){
+  return dbRef(selectedPath);
+}
+
+el('btnSave').onclick = () => {
+  if(selectedPath === null){ return; }
+  let val;
+  try{ val = JSON.parse(editor.value); }
+  catch(e){ showMsg('Invalid JSON: ' + e.message, true); return; }
+  refForSelected().set(val)
+    .then(() => { showMsg('Saved.', false); loadTree(); })
+    .catch(e => showMsg('Save failed: ' + e.message, true));
+};
+
+el('btnDelete').onclick = () => {
+  if(selectedPath === null){ return; }
+  if(!confirm('Delete this node and everything under it?')) return;
+  refForSelected().remove()
+    .then(() => {
+      showMsg('Deleted.', false);
+      selectedPath = null;
+      editor.value = '';
+      pathBar.textContent = 'Node deleted.';
+      el('btnSave').disabled = true;
+      el('btnDelete').disabled = true;
+      el('btnReload').disabled = true;
+      addRow.style.display = 'none';
+      loadTree();
+    })
+    .catch(e => showMsg('Delete failed: ' + e.message, true));
+};
+
+el('btnReload').onclick = () => {
+  if(selectedPath === null) return;
+  showMsg('Reloading full value from Firebase...', false);
+  dbRef(selectedPath).once('value').then(snap => {
+    editor.readOnly = false;
+    editor.value = JSON.stringify(snap.val(), null, 2);
+    el('btnSave').disabled = false;
+    showMsg('Reloaded (full value).', false);
+  }).catch(e => showMsg('Reload failed: ' + e.message, true));
+};
+
+el('btnAddChild').onclick = () => {
+  const k = el('newKey').value.trim();
+  const rawV = el('newVal').value;
+  if(!k){ showMsg('Enter a key name.', true); return; }
+  let v;
+  try{ v = JSON.parse(rawV); }
+  catch(e){ v = rawV; }
+  refForSelected().child(k).set(v)
+    .then(() => {
+      showMsg('Added "' + k + '".', false);
+      el('newKey').value = ''; el('newVal').value = '';
+      loadTree();
+    })
+    .catch(e => showMsg('Add failed: ' + e.message, true));
+};
+
+function showMsg(text, isErr){
+  msg.className = isErr ? 'err' : 'ok';
+  msg.textContent = text;
+}
+
+el('search').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  document.querySelectorAll('#tree .node').forEach(node => {
+    const row = node.querySelector(':scope > .node-row');
+    const key = row.querySelector('.key').textContent.toLowerCase();
+    const match = !q || key.includes(q);
+    node.style.display = match || nodeContainsMatch(node, q) ? '' : (q ? 'none' : '');
+  });
+});
+
+function nodeContainsMatch(node, q){
+  if(!q) return true;
+  const kids = node.querySelectorAll('.children .node-row .key');
+  for(const k of kids){ if(k.textContent.toLowerCase().includes(q)) return true; }
+  return false;
+}
+
+
+// ---------- Tab switching (Browse / Sync) ----------
+document.querySelectorAll('.tabBtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tabBtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const tab = btn.dataset.tab;
+    document.getElementById('panel-browse').style.display = tab === 'browse' ? 'flex' : 'none';
+    document.getElementById('panel-sync').style.display = tab === 'sync' ? 'flex' : 'none';
+  });
+});
+// Sync log is always visible in its own tab now — no separate show/hide button needed there,
+// but keep btnToggleLog harmless if referenced elsewhere.
+if(document.getElementById('btnToggleLog')){
+  document.getElementById('syncLog').style.display = 'block';
+}
+</script>
+</body>
+</html>
