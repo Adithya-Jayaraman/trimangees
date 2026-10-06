@@ -45,10 +45,11 @@ if [ ! -d "$EL/dist" ]; then
 fi
 rm -rf "$ROOT/opt/trimangees"; mkdir -p "$ROOT/opt/trimangees"
 cp -a "$EL/dist" "$ROOT/opt/trimangees/electron"
-rsync -a --exclude node_modules --exclude 'test*' "$HERE/shell/" "$ROOT/opt/trimangees/shell/"
+rsync -a --chown=0:0 --exclude node_modules --exclude 'test*' "$HERE/shell/" "$ROOT/opt/trimangees/shell/"
 
 echo "### system overlay"
-rsync -a "$HERE/system/" "$ROOT/"
+rsync -a --chown=0:0 "$HERE/system/" "$ROOT/"
+chown -R 0:0 "$ROOT/etc/sudoers.d" "$ROOT/usr/local" "$ROOT/opt/trimangees"
 chmod 755 "$ROOT"/usr/local/bin/trimangees-* "$ROOT/usr/local/sbin/trifs"
 chmod 440 "$ROOT/etc/sudoers.d/trimangees"
 chmod 4755 "$ROOT/opt/trimangees/electron/chrome-sandbox" 2>/dev/null || true
