@@ -2105,7 +2105,7 @@ function buildLock() {
   }
   const pin = $("#lock-pin");
   pin.addEventListener("input", () => {
-    if (pin.value.length >= 4) trySubmitPin();
+    if (USERS[lockUser] && pin.value === USERS[lockUser].pin) trySubmitPin();   // longer PINs: press Enter
   });
   pin.addEventListener("keydown", (e) => {
     e.stopPropagation();
