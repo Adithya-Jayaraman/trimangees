@@ -869,3 +869,6 @@ body.hide-icons #icons{display:none}
 body.big-icons .desk-icon{transform:scale(1.3);transform-origin:top left}body.small-icons .desk-icon{transform:scale(.8);transform-origin:top left}
 body.hi-contrast{filter:contrast(1.25) saturate(1.1)}body.big-text .win,body.big-text #start-menu{font-size:115%}
 .desk-icon .lnk{position:absolute;left:8px;bottom:26px;background:#fff;color:#000;border-radius:4px;font-style:normal;font-size:10px;padding:0 3px}
+
+.set-side{overflow-y:auto;max-height:100%}
+.set-main{overflow-y:auto}
