@@ -553,10 +553,10 @@ const EX = (() => {
           if (W.pin.length < 4) return toast("Setup", "Your PIN needs at least 4 characters.");
           W.name = n;
         }
-        if (W.step === 3 && W.copyApps) {
+        if (W.step === 3 && W.copyApps && !W.copied) {
           const log = g("#wz-log"); log.hidden = false; g("#wz-next").disabled = true; log.textContent = "Copying…";
           await transferCloudApps((m) => { log.textContent = m; log.scrollTop = 1e6; });
-          g("#wz-next").disabled = false; W.copyApps = false; return;      // show result; press Next again to continue
+          g("#wz-next").disabled = false; W.copied = true; return;      // show result; press Next again to continue
         }
         if (W.step === 5) return finish();
         W.step++; draw();
