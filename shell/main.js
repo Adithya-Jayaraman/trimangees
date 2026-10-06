@@ -91,7 +91,7 @@ function createWindow() {
     // keeps at the BOTTOM, so Windows programs and Chrome open on top of it.
     const { bounds } = screen.getPrimaryDisplay();
     Object.assign(opts, { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
-      frame: false, resizable: false, movable: false, fullscreenable: false, skipTaskbar: true,
+      frame: false, resizable: true, movable: false, fullscreenable: false, skipTaskbar: true,
       minWidth: 0, minHeight: 0 });
   }
   win = new BrowserWindow(opts);
@@ -108,6 +108,21 @@ function createWindow() {
     const refit = () => { try { win.setBounds(screen.getPrimaryDisplay().bounds); extwin.pinShellBelow(); } catch (e) {} };
     screen.on('display-metrics-changed', refit);
     screen.on('display-added', refit);
+    // The VM window can be resized at any time (VirtualBox full screen etc.): follow the real X screen size.
+    let lastDim = '';
+    setInterval(() => {
+      require('child_process').exec('xdpyinfo 2>/dev/null | grep dimensions', { env: process.env, timeout: 3000 }, (err, out) => {
+        const m = /(\d+)x(\d+) pixels/.exec(out || ''); if (!m) return;
+        const W = +m[1], H = +m[2], cur = win.getBounds();
+        if (lastDim === W + 'x' + H && cur.width === W && cur.height === H) return;
+        lastDim = W + 'x' + H;
+        try { win.setBounds({ x: 0, y: 0, width: W, height: H }); } catch (e) {}
+        if (cur.width !== W || cur.height !== H) {
+          require('child_process').exec(`wmctrl -r "TrimangeesOS Shell" -e 0,0,0,${W},${H}`, () => {});
+        }
+        extwin.pinShellBelow();
+      });
+    }, 1500);
   }
   win.loadFile('os.html');
   setupDownloads(session.defaultSession);

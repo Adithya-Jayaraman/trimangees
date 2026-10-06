@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# a newer push cancels any older build that is still running
+concurrency:
+  group: build-iso
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
