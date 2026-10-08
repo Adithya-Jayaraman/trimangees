@@ -28,10 +28,16 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin grub-common mtools rsync
+          sudo apt-get install -y zip debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin grub-common mtools rsync
 
       - name: Build ISO
-        run: sudo WORK=/mnt/trios OUT=$PWD/out ./build/build-iso.sh
+        run: sudo BUILD_ID="$(date +%Y%m%d-%H%M)-${GITHUB_SHA::7}" WORK=/mnt/trios OUT=$PWD/out ./build/build-iso.sh
+
+      - name: Make the desktop-only update file (shell-update.zip)
+        run: |
+          mkdir -p out
+          ( cd shell && zip -qr ../out/shell-update.zip . -x 'node_modules/*' 'test*' )
+          ls -la out/shell-update.zip
 
       - name: Boot test in QEMU (best effort)
         continue-on-error: true
@@ -51,8 +57,8 @@ jobs:
         run: |
           TAG="build-$(date +%Y%m%d-%H%M)"
           gh release create "$TAG" --title "TrimangeesOS $TAG" --notes "Download the ISO file(s) below." \
-            out/TrimangeesOS.iso* out/serial.log 2>/dev/null || \
-          gh release create "$TAG" --title "TrimangeesOS $TAG" --notes "Download the ISO file(s) below." out/TrimangeesOS.iso*
+            out/TrimangeesOS.iso* out/shell-update.zip out/serial.log 2>/dev/null || \
+          gh release create "$TAG" --title "TrimangeesOS $TAG" --notes "Download the ISO file(s) below." out/TrimangeesOS.iso* out/shell-update.zip
 
       - uses: actions/upload-artifact@v4
         if: always()

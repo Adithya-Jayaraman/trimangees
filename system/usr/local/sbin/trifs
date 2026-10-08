@@ -72,6 +72,33 @@ status_json() {
 }
 
 # ── make the folder layout and hand it to the desktop user ───
+# ── keep software installed with apt after a restart ─────────
+# Changes to /usr, /etc ... are written to an overlay stored on TriFS (one per
+# OS build, so an older overlay never mixes with a newer system).
+PERSIST_TARGETS="${TRIFS_PERSIST_TARGETS:-/usr /etc /opt /var/lib/dpkg /var/lib/apt /var/cache/apt}"
+persist_on() {
+  [ "${TRIFS_PERSIST:-1}" = 1 ] || return 0
+  if [ "${TRIFS_PERSIST_FORCE:-0}" != 1 ] && [ ! -d /run/live/medium ] && [ ! -d /lib/live/mount/medium ]; then return 0; fi
+  is_mounted "$MNT" || return 0
+  local bid base t key
+  bid=$(tr -dc 'A-Za-z0-9._-' < "${TRIFS_BUILDID_FILE:-/etc/trimangees-build}" 2>/dev/null | head -c 40); [ -n "$bid" ] || bid=default
+  base="$MNT/system/overlay/$bid"
+  for t in $PERSIST_TARGETS; do
+    [ -d "$t" ] || continue
+    mountpoint -q "$t" 2>/dev/null && continue
+    key=$(echo "$t" | tr '/' '_')
+    mkdir -p "$base/$key/upper" "$base/$key/work" 2>/dev/null || continue
+    mount -t overlay overlay -o "lowerdir=$t,upperdir=$base/$key/upper,workdir=$base/$key/work" "$t" 2>>"$LOG" \
+      && log "persisting $t" || log "could not persist $t"
+  done
+}
+persist_off() {
+  local t
+  for t in $(echo "$PERSIST_TARGETS" | tr ' ' '\n' | tac); do
+    mountpoint -q "$t" 2>/dev/null && findmnt -nro FSTYPE -M "$t" 2>/dev/null | grep -q overlay && { umount "$t" 2>/dev/null || umount -l "$t" 2>/dev/null; }
+  done
+}
+
 prepare_layout() {
   local u
   mkdir -p "$MNT/home" "$MNT/Applications" "$MNT/shared" "$MNT/system"
@@ -81,6 +108,7 @@ prepare_layout() {
   if [ -n "$BIND_HOME" ] && [ -d "$BIND_HOME" ] && ! mountpoint -q "$BIND_HOME" 2>/dev/null; then
     mount --bind "$MNT/home" "$BIND_HOME" 2>>"$LOG" || log "bind mount of home failed"
   fi
+  persist_on
 }
 
 write_state() {   # write_state mode device image
@@ -284,6 +312,7 @@ cmd_create_img() {
 
 cmd_unmount() {
   sync
+  persist_off
   [ -n "$BIND_HOME" ] && mountpoint -q "$BIND_HOME" 2>/dev/null && { umount "$BIND_HOME" 2>/dev/null || umount -l "$BIND_HOME" 2>/dev/null; }
   if is_mounted "$MNT"; then umount "$MNT" 2>>"$LOG" || umount -l "$MNT" 2>>"$LOG"; fi
   local mp
@@ -313,6 +342,7 @@ case "${1:-}" in
   mount)       cmd_mount ;;
   format)      [ -n "${2:-}" ] || fail "which disk?"; cmd_format "$2" ;;
   create-img)  [ -n "${2:-}" ] && [ -n "${3:-}" ] || fail "usage: trifs create-img PARTITION GB"; cmd_create_img "$2" "$3" ;;
+  persist)     persist_on; status_json ;;
   unmount|umount) cmd_unmount ;;
   *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount"}'; exit 2 ;;
 esac

@@ -64,6 +64,11 @@ say "fonts"
 $APT install fonts-inter fonts-jetbrains-mono fonts-dejavu-core fonts-liberation2 fonts-noto-core fonts-noto-color-emoji
 $APT install xterm x11-utils
 
+say "extra tools: Flatpak app store, boot screen, archive tools"
+$APT install flatpak zstd zip unzip p7zip-full plymouth plymouth-label xvfb || echo "WARNING: some extra tools did not install"
+mkdir -p /etc/sysctl.d
+printf 'kernel.apparmor_restrict_unprivileged_userns=0\nkernel.unprivileged_userns_clone=1\n' > /etc/sysctl.d/99-trimangees.conf
+
 say "network"
 $APT install network-manager network-manager-gnome- 2>/dev/null || $APT install network-manager
 
@@ -89,6 +94,16 @@ if curl -fL --retry 3 --connect-timeout 20 -o /tmp/chrome.deb https://dl.google.
 else
   echo "WARNING: could not download Chrome (the Trimangees Browser still works)"
 fi
+
+say "Windows environment template (copied for each user, so the first .exe starts fast)"
+TPL=/opt/trimangees/wineprefix-template
+mkdir -p /opt/trimangees
+id trimangees >/dev/null 2>&1 || useradd -u 1000 -U -d /var/lib/trimangees -m -s /bin/bash trimangees
+mkdir -p "$TPL"; chown -R trimangees:trimangees "$TPL" /var/lib/trimangees
+timeout 600 su trimangees -c "export HOME=/var/lib/trimangees WINEPREFIX=$TPL WINEARCH=win64 WINEDEBUG=-all WINEDLLOVERRIDES='winemenubuilder.exe=d'; xvfb-run -a wineboot -i" >/tmp/wineprefix.log 2>&1 \
+  && echo "wine prefix template ready" || { echo "WARNING: wine prefix template not built"; tail -5 /tmp/wineprefix.log; }
+chown -R root:root "$TPL" 2>/dev/null; chmod -R a+rX "$TPL" 2>/dev/null
+rm -f /tmp/wineprefix.log
 
 say "the desktop user"
 getent group vboxsf >/dev/null || groupadd -r vboxsf
@@ -117,6 +132,7 @@ say "services"
 systemctl set-default graphical.target
 systemctl enable trifs-mount.service trimangees-session.service NetworkManager.service systemd-resolved.service || true
 systemctl disable NetworkManager-wait-online.service systemd-networkd-wait-online.service 2>/dev/null || true
+systemctl mask NetworkManager-wait-online.service systemd-networkd-wait-online.service plymouth-read-write.service 2>/dev/null || true
 systemctl mask apt-daily.timer apt-daily-upgrade.timer motd-news.timer e2scrub_all.timer fstrim.timer \
     ModemManager.service snapd.service snapd.socket cloud-init.service 2>/dev/null || true
 systemctl enable virtualbox-guest-utils.service 2>/dev/null || true

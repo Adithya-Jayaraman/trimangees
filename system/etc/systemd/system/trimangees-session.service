@@ -6,6 +6,7 @@ Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
+ExecStartPre=-/usr/bin/plymouth quit
 ExecStartPre=/usr/bin/install -d -m 0700 -o trimangees -g trimangees /run/user/1000
 ExecStartPre=/usr/bin/install -d -m 0755 -o trimangees -g trimangees /var/log/trimangees /run/trimangees
 ExecStart=/usr/bin/xinit /usr/local/bin/trimangees-xclient -- /usr/bin/Xorg :0 vt1 -nolisten tcp -noreset

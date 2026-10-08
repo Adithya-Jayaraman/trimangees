@@ -1,6 +1,6 @@
 {
   "name": "trimangees-os",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "TrimangeesOS desktop shell (Electron) for the Linux image",
   "main": "main.js",
   "scripts": { "start": "electron ." },

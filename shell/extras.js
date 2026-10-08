@@ -46,7 +46,19 @@ const EX = (() => {
         theme: a.theme || prev.theme || { preset: 0, accent: a.color || "#4a8af0" } };
     }
   }
-  function setAccount(name, a) {
+  const hex = (b) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
+  async function hashPin(pin, salt) {
+    salt = salt || hex(crypto.getRandomValues(new Uint8Array(8)));
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + pin));
+    return "s1:" + salt + ":" + hex(d);
+  }
+  async function pinOk(user, v) {
+    const u = USERS[user]; if (!u) return false;
+    if (u.pinHash) return (await hashPin(v, u.pinHash.split(":")[1])) === u.pinHash;
+    return v === u.pin;
+  }
+  async function setAccount(name, a) {
+    if (a.pin != null) { a = { ...a, pinHash: await hashPin(a.pin) }; delete a.pin; }
     CFG.accounts = CFG.accounts || {};
     CFG.accounts[name] = { ...(CFG.accounts[name] || {}), ...a };
     CFG.removedUsers = (CFG.removedUsers || []).filter((x) => x !== name);
@@ -252,13 +264,20 @@ const EX = (() => {
   let idleT = null, idleMs = 0;
   function resetIdle() { clearTimeout(idleT); if (idleMs && CURRENT_USER) idleT = setTimeout(() => osDoLogout(), idleMs); }
   ["pointerdown", "keydown", "pointermove"].forEach((ev) => addEventListener(ev, resetIdle, true));
+  async function migratePins() {
+    for (const [n, a] of Object.entries(CFG.accounts || {})) {
+      if (a.pin != null) { a.pinHash = await hashPin(a.pin); delete a.pin; if (USERS[n]) { USERS[n].pinHash = a.pinHash; delete USERS[n].pin; } }
+    }
+    save();
+  }
   function onLogin() {
+    migratePins().catch(() => {});
     const p = prefs();
     idleMs = (p.autoLock || 0) * 60000; resetIdle();
-    if (p.kbLayout) sh(`setxkbmap ${p.kbLayout}`);
+    if (p.kbLayout) sh(`setxkbmap ${p.kbLayout.split(":").join(" ")}`);
     if (p.volume != null) sh(`pactl set-sink-volume @DEFAULT_SINK@ ${p.volume}%`);
     desktopRefresh();
-    setTimeout(() => (p.startup || []).forEach((id) => { try { launch(id); } catch {} }), 1500);
+    setTimeout(() => (EX._safe ? [] : (p.startup || [])).forEach((id) => { try { launch(id); } catch {} }), 1500);
   }
 
   // ── Settings: extra sections ─────────────────────────────
@@ -276,6 +295,7 @@ const EX = (() => {
     const bindToggle = (id, key, after) => { const el = main.querySelector("#" + id); if (el) el.onchange = () => { p[key] = el.checked; save(); applyPrefs(p); after && after(); }; };
     const bindSel = (id, key, conv, after) => { const el = main.querySelector("#" + id); if (el) el.onchange = () => { p[key] = conv ? conv(el.value) : el.value; save(); applyPrefs(p); after && after(el.value); }; };
     const again = () => renderSection(i, main);
+    if (window.EX.extraSections && window.EX.extraSections[name]) return window.EX.extraSections[name](main, again, H);
 
     if (name === "Network") {
       main.innerHTML = H("Wi-Fi and cable connections. Virtual machines usually show one wired connection that just works.") + `<div class="ex-load">Looking…</div>`;
@@ -415,7 +435,8 @@ const EX = (() => {
       main.querySelector("#bk-exp").onclick = async () => { const r = await kernel.fsBackup(); toast("Backup", r && r.ok ? "Saved." : (r && r.error) || "Cancelled."); };
     } else if (name === "Developer") {
       main.innerHTML = H("For tinkering.") +
-        `<div class="set-row-btns"><button class="set-btn" id="dv-x">Open a full terminal window</button><button class="set-btn" id="dv-log">Show desktop log</button><button class="set-btn" id="dv-st">Self-test</button><button class="set-btn" id="dv-dev">Open developer tools</button></div><div id="dv-o"></div>` +
+        `<div class="set-row-btns"><button class="set-btn" id="dv-x">Open a full terminal window</button><button class="set-btn" id="dv-log">Show desktop log</button><button class="set-btn" id="dv-st">Self-test</button><button class="set-btn" id="dv-dev">Open developer tools</button></div>
+         <div class="set-row-btns"><button class="set-btn" id="dv-diag" style="background:var(--accent);color:#fff">Copy diagnostics</button><span class="set-note" id="dv-diagn">If something breaks, press this and paste the result to Claude.</span></div><div id="dv-o"></div>` +
         row("Show hidden files in Files by default", "", toggle("dv-h", p.showHidden));
       const out = main.querySelector("#dv-o");
       main.querySelector("#dv-x").onclick = () => kernel.xterm();
@@ -423,6 +444,15 @@ const EX = (() => {
       main.querySelector("#dv-st").onclick = async () => { out.innerHTML = pre((await sh("/usr/local/bin/trimangees-selftest 2>&1 | head -60", 30000)).out); };
       main.querySelector("#dv-dev").onclick = () => { try { kernel.sh("true"); } catch {} document.dispatchEvent(new KeyboardEvent("keydown", { key: "F12" })); };
       bindToggle("dv-h", "showHidden");
+      main.querySelector("#dv-diag").onclick = async () => {
+        const n = main.querySelector("#dv-diagn"); n.textContent = "Collecting…";
+        const r = await kernel.diag();
+        let copied = false;
+        try { await navigator.clipboard.writeText(r.text); copied = true; } catch {}
+        if (!copied) { try { const t = document.createElement("textarea"); t.value = r.text; document.body.appendChild(t); t.select(); copied = document.execCommand("copy"); t.remove(); } catch {} }
+        n.textContent = copied ? "Copied! Now paste it into the chat with Claude (Ctrl+V). A copy is also saved in System/logs." : "Could not copy — it is saved in System/logs (see below).";
+        out.innerHTML = pre(r.text.slice(0, 4000));
+      };
     }
   }
 
@@ -504,7 +534,7 @@ const EX = (() => {
   }
   function runWizard(st0) {
     const W = { step: 0, name: "Adithya", pin: "", color: COLORS[0], avatar: "⚡", avatarImg: "", keepFamily: true,
-      copyApps: true, cloud: true, preset: 3, accent: COLORS[0], extra: [] };
+      kb: "us", tz: "Asia/Kolkata", copyApps: true, cloud: true, preset: 3, accent: COLORS[0], extra: [] };
     let drive = st0 || {};
     const ov = document.createElement("div"); ov.id = "ex-wiz"; document.body.appendChild(ov);
     const steps = ["Welcome", "Drive", "You", "Apps", "Look", "Finish"];
@@ -512,7 +542,9 @@ const EX = (() => {
     async function draw() {
       const dots = `<div class="wz-dots">${steps.map((s, i) => `<i class="${i === W.step ? "on" : i < W.step ? "done" : ""}"></i>`).join("")}</div>`;
       let body = "", next = "Next", canNext = true;
-      if (W.step === 0) body = `<h1>Welcome to TrimangeesOS</h1><p>A few quick questions and your computer is ready. Everything you save goes on your TRIMANGEES drive (TriFS). Nothing is written to your Windows C: or D: drives.</p>`;
+      if (W.step === 0) body = `<h1>Welcome to TrimangeesOS</h1><p>A few quick questions and your computer is ready. Everything you save goes on your TRIMANGEES drive (TriFS). Nothing is written to your Windows C: or D: drives.</p>
+        <label>Keyboard layout</label><select id="wz-kb">${[["us","English (US)"],["in","English (India)"],["gb","English (UK)"],["de","German"],["fr","French"],["es","Spanish"],["it","Italian"],["pt","Portuguese"],["ru","Russian"],["in:tam","Tamil"],["in:hin-wx","Hindi"]].map(([v, l]) => `<option value="${v}" ${W.kb === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+        <label>Time zone</label><select id="wz-tz">${["Asia/Kolkata","UTC","Europe/London","Europe/Paris","America/New_York","America/Chicago","America/Los_Angeles","Asia/Dubai","Asia/Singapore","Asia/Tokyo","Australia/Sydney"].map((z) => `<option ${W.tz === z ? "selected" : ""}>${z}</option>`).join("")}</select>`;
       if (W.step === 1) {
         drive = await kernel.trifsStatus().catch(() => drive);
         body = `<h1>Your drive</h1>` + (driveOk()
@@ -539,6 +571,7 @@ const EX = (() => {
     }
     function grab() {
       const g = (id) => ov.querySelector(id);
+      if (W.step === 0 && g("#wz-kb")) { W.kb = g("#wz-kb").value; W.tz = g("#wz-tz").value; }
       if (W.step === 2) { W.name = g("#wz-n").value.trim(); W.pin = g("#wz-p").value; W.keepFamily = g("#wz-fam").checked; }
       if (W.step === 3) { W.copyApps = g("#wz-ca").checked; W.cloud = g("#wz-cl").checked; }
     }
@@ -574,7 +607,7 @@ const EX = (() => {
       }
     }
     async function finish() {
-      const rec = { pin: W.pin, color: W.accent || W.color, avatar: W.avatar, avatarImg: W.avatarImg,
+      const rec = { pinHash: await hashPin(W.pin), color: W.accent || W.color, avatar: W.avatar, avatarImg: W.avatarImg,
         interests: "", flavor: "Welcome back, " + W.name + "!", theme: { preset: W.preset, accent: W.accent } };
       if (W.avatarImg === "" && !W.avatar) rec.avatar = "";
       CFG.accounts = { ...(CFG.accounts || {}), [W.name]: rec };
@@ -582,6 +615,8 @@ const EX = (() => {
       CFG.users = CFG.users || {}; CFG.users[W.name] = { ...rec.theme };
       CFG.prefs = { ...(CFG.prefs || {}), noCloud: !W.cloud };
       CFG.lastUser = W.name; CFG.setupDone = true;
+      CFG.prefs.kbLayout = W.kb === "us" ? "" : W.kb;
+      try { if (CFG.prefs.kbLayout) kernel.sh("setxkbmap " + CFG.prefs.kbLayout.split(":").join(" ")); kernel.sh("sudo -n timedatectl set-timezone " + W.tz); } catch {}
       applyAccounts(); try { await kernel.userHome(W.name); } catch {}
       await kernel.setConfig(CFG);
       try { buildLock(); selectLockUser(W.name); } catch {}
@@ -591,6 +626,6 @@ const EX = (() => {
   }
 
   return { applyAccounts, avatarText, avatarCss, avatarStyle, bgMenu, desktopMenu, desktopRefresh, makeShortcut, openDefault,
-    applyPrefs, onLogin, sectionNames, renderSection, maybeFirstRun, askText, transferCloudApps, newItems };
+    applyPrefs, onLogin, hashPin, pinOk, sectionNames, renderSection, maybeFirstRun, askText, transferCloudApps, newItems };
 })();
 window.EX = EX;

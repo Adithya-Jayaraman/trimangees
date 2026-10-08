@@ -1,0 +1,21 @@
+Window.SetBackgroundTopColor(0.04, 0.04, 0.08);
+Window.SetBackgroundBottomColor(0.07, 0.09, 0.19);
+
+title = Image.Text("TRIMANGEES OS", 1.0, 1.0, 1.0, 1, "Sans Bold 28");
+bolt  = Image.Text("\xE2\x9A\xA1", 1.0, 0.82, 0.25, 1, "Sans 64");
+sub   = Image.Text("storm-powered", 0.6, 0.65, 0.85, 1, "Sans 13");
+
+cx = Window.GetWidth() / 2;
+cy = Window.GetHeight() / 2;
+
+bolt_s  = Sprite(bolt);  bolt_s.SetPosition(cx - bolt.GetWidth() / 2,  cy - 120, 10);
+title_s = Sprite(title); title_s.SetPosition(cx - title.GetWidth() / 2, cy - 30, 10);
+sub_s   = Sprite(sub);   sub_s.SetPosition(cx - sub.GetWidth() / 2,   cy + 20, 10);
+
+frame = 0;
+fun refresh_cb() {
+  frame++;
+  a = 0.65 + 0.35 * Math.Sin(frame / 12);
+  bolt_s.SetOpacity(a);
+}
+Plymouth.SetRefreshFunction(refresh_cb);

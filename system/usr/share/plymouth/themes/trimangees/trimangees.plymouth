@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TrimangeesOS
+Description=Storm-powered boot screen
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/trimangees
+ScriptFile=/usr/share/plymouth/themes/trimangees/trimangees.script

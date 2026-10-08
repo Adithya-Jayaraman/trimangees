@@ -66,6 +66,13 @@ function preparePrefix(user) {
   if (!which('wine')) return Promise.resolve(false);
   const env = envFor(user); ensureDirs(env);
   notify('wine:state', { state: 'preparing', user });
+  // Fast path: copy the Windows environment that was prepared when the OS was built.
+  const TEMPLATE = '/opt/trimangees/wineprefix-template';
+  try {
+    if (!prefixReady(user) && fs.existsSync(path.join(TEMPLATE, 'system.reg'))) {
+      fs.cpSync(TEMPLATE, env.WINEPREFIX, { recursive: true });
+    }
+  } catch {}
   const p = new Promise((resolve) => {
     const child = spawn('wineboot', ['-u'], { env, stdio: 'ignore' });
     const t = setTimeout(() => { try { child.kill(); } catch {} }, 5 * 60 * 1000);
@@ -276,5 +283,60 @@ function listLocalApps() {
   return apps;
 }
 
-module.exports = { setUser, setNotifier, envFor, which, kindOf, runFile, runWineTool, runChrome, chromeBin,
+// ── Linux apps (apt-installed and Flatpak) for the Start menu ─
+const LX_SKIP = /^(wine|winecfg|winefile|winemine|winepath|xterm|uxterm|electron|nm-|pavucontrol-qt|display-im6|org\.freedesktop\.|org\.gtk\.|org\.gnome\.Platform|im-config|vim|nano|htop|fcitx|ibus|gucharmap|python|mimeinfo|cups|system-config|software-properties|update-manager|gnome-session|xdg-)/i;
+function lxParse(file) {
+  let t; try { t = fs.readFileSync(file, 'utf8'); } catch { return null; }
+  const sec = t.split(/\n\[/)[0];                          // [Desktop Entry] only
+  const get = (k) => { const m = new RegExp('^' + k + '=(.*)$', 'm').exec(sec); return m ? m[1].trim() : ''; };
+  if (get('Type') && get('Type') !== 'Application') return null;
+  if (/^true$/i.test(get('NoDisplay')) || /^true$/i.test(get('Hidden'))) return null;
+  const only = get('OnlyShowIn'); if (only && !/x-cinnamon|xfce|lxde|openbox|trimangees/i.test(only)) return null;
+  const name = get('Name'), exec = get('Exec');
+  if (!name || !exec) return null;
+  return { name, exec: exec.replace(/%[a-zA-Z%]/g, '').trim(), icon: get('Icon'), terminal: /^true$/i.test(get('Terminal')), cats: get('Categories') };
+}
+function lxIcon(name, bases) {
+  if (!name) return null;
+  if (path.isAbsolute(name)) return fs.existsSync(name) ? name : null;
+  for (const b of bases) for (const sz of ['128x128', '96x96', '64x64', '48x48', '256x256', '32x32', 'scalable']) {
+    for (const ext of ['png', 'svg']) {
+      const f = path.join(b, 'icons/hicolor', sz, 'apps', name + '.' + ext);
+      if (fs.existsSync(f)) return f;
+    }
+  }
+  for (const ext of ['png', 'svg', 'xpm']) { const f = '/usr/share/pixmaps/' + name + '.' + ext; if (fs.existsSync(f) && ext !== 'xpm') return f; }
+  return null;
+}
+function listLinuxApps(user) {
+  const env = envFor(user);
+  const dirs = [
+    [path.join(env.XDG_DATA_HOME, 'flatpak/exports/share'), 'flatpak'],
+    ['/var/lib/flatpak/exports/share', 'flatpak'],
+    ['/usr/share', 'apt'],
+  ];
+  const seen = new Set(), out = [];
+  for (const [base, src] of dirs) {
+    const dir = path.join(base, 'applications');
+    let files = []; try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.desktop')); } catch { continue; }
+    for (const f of files) {
+      const id = f.replace(/\.desktop$/, '');
+      if (seen.has(id) || LX_SKIP.test(id)) continue;
+      const d = lxParse(path.join(dir, f)); if (!d) continue;
+      if (/\bwine\b/i.test(d.exec)) continue;
+      seen.add(id);
+      out.push({ id: 'lx-' + id.toLowerCase().replace(/[^a-z0-9]+/g, '-'), name: d.name, exec: d.exec, terminal: d.terminal,
+        icon: (() => { const i = lxIcon(d.icon, [base, '/usr/share']); return i ? pathToFileURL(i).href : ''; })(), source: src });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+function runLinuxApp(execLine, terminal, user) {
+  const env = { ...envFor(user), TERM: 'xterm' };
+  ensureDirs(env);
+  const cmd = terminal && which('xterm') ? `xterm -e ${execLine}` : execLine;
+  return launch('/bin/bash', ['-c', cmd], { env }, execLine.split(/\s+/)[0].split('/').pop());
+}
+
+module.exports = { listLinuxApps, runLinuxApp, setUser, setNotifier, envFor, which, kindOf, runFile, runWineTool, runChrome, chromeBin,
   preparePrefix, prefixReady, listWineApps, runWineApp, listLocalApps, homeReal };

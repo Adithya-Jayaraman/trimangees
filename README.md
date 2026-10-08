@@ -1,4 +1,4 @@
-# TrimangeesOS 3.0 - START HERE
+# TrimangeesOS 3.1 - START HERE
 
 Everything below is written so you can follow it step by step. Total hands-on time: about 20 minutes
 (plus waiting while GitHub builds the ISO for you).
@@ -6,8 +6,7 @@ Everything below is written so you can follow it step by step. Total hands-on ti
 ## Rule #1: nothing goes on C: or D:
 
 - The ISO is built by GitHub, not by your PC.
-- You will save the ISO and the virtual machine only on the TRIMANGEES drive (call it T: below; use
-  its real letter).
+- You will save the ISO and the virtual machine only on the TRIMANGEES drive (call it T: below; for you it is E:\TRIMANGEES - use its real letter).
 - Two settings make sure VirtualBox does not sneak files onto C: (see Part 3, steps 1 and 2).
 
 ## Part 1 - Let GitHub build it (about 5 minutes of your time)
@@ -57,7 +56,17 @@ When it finishes, sign in with your PIN. Later you can change anything in Settin
 - **Right-click anywhere in Files or on the desktop > New:** folder, text, HTML, Python, script, CSV and about 20 more, or "Empty file (any type)".
 - **Desktop shortcuts to anything:** right-click a file, folder or Start-menu app > Create desktop shortcut. Or desktop right-click > New > Shortcut (web address, folder path, or app name).
 - **Terminal:** type any Linux command. Programs that ask a question work. For full-screen programs like nano, htop, python, type `xterm` for a full terminal window.
-  You have full sudo. Note: software you install with `apt` lives in memory and disappears at shutdown; put programs in the Applications folder instead.
+  You have full sudo. Software you install with `apt` is now kept on TriFS and is still there after a restart (it belongs to the ISO build you installed it on).
+- **App Store:** Start > App Store. VLC, LibreOffice, GIMP, VS Code and more (from Flathub, stored on TriFS). They then show up in Start.
+- **Files:** Ctrl+click / Shift+click to select many, Ctrl+C / X / V, Delete sends to the Recycle Bin (left side), Space previews, pictures show thumbnails, drag files between folders (hold Ctrl to copy).
+  Right-click: Compress to ZIP, Extract here, Open terminal here, Pin to taskbar, Create desktop shortcut.
+- **Bottom right:** desktop number (4 virtual desktops, Ctrl+Alt+Left/Right), sound, Wi-Fi, notifications (history), calendar (click the clock), and the thin button at the far right = Show desktop.
+- **Windows (VirtualBox):** Settings > VirtualBox explains clipboard, drag and drop and shared folders (all one-time clicks in the VirtualBox menu). Also tick **View > Auto-resize Guest Display** for a full-screen desktop.
+- **Windows programs:** Settings > Windows programs has one-click add-ons (Visual C++, .NET, fonts) if an .exe will not start.
+- **Backups:** your home folder is copied to TriFS once a day (last 3 kept). Settings > Backups.
+- **Themes:** Settings > Themes & Wallpapers (desktop and sign-in screen).
+- **If something breaks:** Settings > Developer > **Copy diagnostics**, then paste it to me.
+- **Updating without a new ISO:** each build also has a small file `shell-update.zip` on the Releases page. Settings > Desktop updates > install it (or press "Get the latest update"). If the desktop crashes 3 times it goes into safe mode and puts the bad update aside by itself.
 - **Chrome and the Trimangees Browser** are both in the Start menu. Downloads go to Downloads on TriFS.
 - **Safe shutdown:** Start > power > Shut down (it closes TriFS properly).
 - **Emergency text console:** Ctrl+Alt+F2, user `trimangees`, password `trimangees`. Back: Ctrl+Alt+F1.

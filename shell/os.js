@@ -41,6 +41,8 @@ const BUILT_IN_APPS = [
   { id: "w-cmd",    name: "Windows Command Prompt", color: "#444a60", letter: "\u25A0", builtin: true, exec: { type: "winetool", args: ["wineconsole", "cmd"] }, needs: "wine", category: "Windows" },
   { id: "w-progs",  name: "Windows Programs", color: "#3a9d8f", letter: "U",    builtin: true, exec: { type: "winetool", args: ["uninstaller"] },         needs: "wine", category: "Windows" },
   { id: "w-config", name: "Wine Settings",  color: "#8287aa", letter: "\u2699", builtin: true, exec: { type: "winetool", args: ["winecfg"] },              needs: "wine", category: "Windows" },
+  { id: "player",   name: "Media Player", color: "#ff8a3c", letter: "\u25B6", builtin: true, category: "System" },
+  { id: "store",    name: "App Store",    color: "#2db37a", letter: "\u2B07", builtin: true, category: "System" },
   { id: "viewer",    name: "Image Viewer", color: "#4aa8c8", letter: "V", builtin: true, hidden: true },
   { id: "htmlview",  name: "HTML Viewer",  color: "#e07830", letter: "H", builtin: true, hidden: true },
   { id: "editor",    name: "Text Editor",  color: "#c8a04a", letter: "E", builtin: true, hidden: true },
@@ -90,6 +92,7 @@ function mergeApps() {
     map.set(ca.id, base ? { ...base, ...ca, builtin: base.builtin } : ca);
   }
   for (const la of LOCAL_APPS) map.set(la.id, la);
+  try { for (const xa of (EX.extraApps ? EX.extraApps() : [])) if (!map.has(xa.id)) map.set(xa.id, xa); } catch {}
   APPS = [...map.values()];
   PINNED = effectivePins();
   buildTaskbar();
@@ -132,18 +135,17 @@ async function loadApps() {
 }
 
 // ── Users of this TrimangeesOS machine ──────────────────────
-// PINs here are a family convenience (like a lock screen), not
-// real security — anyone who can read this file can read them.
+// PINs are stored as salted SHA-256 hashes, never as plain text.
 const USERS = {
-  Adithya: { pin: "2407", color: "#4a8af0",
+  Adithya: { pinHash: "s1:cf78844b001d77cd:4f33fb9613b09ba7b68b70017e33002cd28dc79dc97d6d3dba7bb60492cb6179", color: "#4a8af0",
              interests: "Storms \u26a1 \u00b7 Planes \u2708\ufe0f",
              flavor: "Storm season is loading\u2026",
              theme: { preset: 3, accent: "#4a8af0" } },
-  Tarun:   { pin: "2012", color: "#f07830",
+  Tarun:   { pinHash: "s1:ea121588947a419d:4afd15086154a0507ac7cdf074412e6e93e39820f42fbd3fdb0048c439c99de0", color: "#f07830",
              interests: "Rocks \u{1FAA8} \u00b7 Planes \u2708\ufe0f",
              flavor: "Rock-solid session ready.",
              theme: { preset: 1, accent: "#f07830" } },
-  Arjun:   { pin: "2015", color: "#c85ae0",
+  Arjun:   { pinHash: "s1:87ab4fb61ef706f1:fc05a4eca8ec369e7d0e1bfb19398035101887886eb8df372343dd53ed6db068", color: "#c85ae0",
              interests: "Games \u{1F3AE} \u00b7 Rocks \u{1FAA8}",
              flavor: "Player one, ready!",
              theme: { preset: 0, accent: "#c85ae0" } },
@@ -314,6 +316,7 @@ async function fsDoPush() {
 
 // ── Toasts ──────────────────────────────────────────────────
 function toast(title, body) {
+  try { EX.logNote && EX.logNote(title, body); } catch {}
   if (CFG && CFG.prefs && CFG.prefs.quiet) return;
   const el = document.createElement("div");
   el.className = "toast";
@@ -334,7 +337,7 @@ const wins = [];           // { id, app, el, title }
 
 function activeWin() {
   return wins.reduce((best, w) =>
-    (!w.el.classList.contains("minimized") &&
+    (!w.el.classList.contains("minimized") && !w.el.classList.contains("desk-hidden") &&
      (+w.el.style.zIndex || 0) > (best ? +best.el.style.zIndex : -1)) ? w : best, null);
 }
 
@@ -344,6 +347,7 @@ function setWinTitle(w, t) {
 }
 
 function focusWin(w) {
+  if (window.EX && EX.desk !== undefined && (w.desk ?? 0) !== EX.desk) { w.desk = EX.desk; w.el.classList.remove("desk-hidden"); }
   wins.forEach(o => o.el.classList.remove("active"));
   w.el.classList.add("active");
   w.el.style.zIndex = ++zTop;
@@ -413,6 +417,7 @@ function createWindow(appId, arg) {
 
   const w = { id, app: appId, el, title: app.name, arg };
   wins.push(w);
+  try { EX.onNewWin && EX.onNewWin(w); } catch {}
 
   // Focus on any interaction with the window
   el.addEventListener("pointerdown", () => focusWin(w));
@@ -435,7 +440,7 @@ function createWindow(appId, arg) {
     terminal: buildTerminal, explorer: buildExplorer, settings: buildSettings,
     viewer: buildViewer, editor: buildEditor, htmlview: buildHtmlView,
     browser: buildBrowser,
-  }[appId];
+  }[appId] || (EX.builders && EX.builders[appId]);
   if (builder) builder(body, w);
   else buildGenericApp(body, w, app);
 
@@ -453,6 +458,8 @@ async function launchExec(app, arg) {
     else if (ex.type === "wineapp")  res = await kernel.runWineApp(ex.file);
     else if (ex.type === "file")     res = await kernel.runFile(ex.path);
     else if (ex.type === "xterm")    res = await kernel.xterm();
+    else if (ex.type === "linux")    res = await kernel.runLinux(ex.exec, ex.terminal);
+    else if (ex.type === "path")     { if (ex.dir) launch("explorer", ex.path); else openFileInOS(ex.path); res = { ok: true }; }
   } catch (e) { res = { ok: false, error: e.message }; }
   if (res && !res.ok) toast(app.name, res.error || "couldn't start");
   return null;
@@ -514,8 +521,8 @@ function installDrag(w) {
 function detectSnap(x, y) {
   const m = 22, W = innerWidth, H = innerHeight - TASKBAR_H;
   if (y < m) return "max";
-  if (x < m)      return y < H / 2 ? "tl" : "bl";
-  if (x > W - m)  return y < H / 2 ? "tr" : "br";
+  if (x < m)      return y < 60 ? "tl" : y > H - 60 ? "bl" : "l";
+  if (x > W - m)  return y < 60 ? "tr" : y > H - 60 ? "br" : "r";
   return null;
 }
 function snapRect(zone) {
@@ -664,6 +671,7 @@ function renderSearch() {
     row.onclick = () => { launch(a.id); closeSearch(); };
     searchPanel.appendChild(row);
   });
+  try { EX.searchFiles && EX.searchFiles(q, searchPanel, closeSearch); } catch {}
   searchPanel.hidden = false;
 }
 function closeSearch() {
@@ -902,8 +910,8 @@ function buildTerminal(body, w) {
   const userTag = (CURRENT_USER || "user").toLowerCase() + "@trimangees";
   body.querySelector(".term-in .u").textContent = userTag;
   const startHome = USER_HOME || "/";
-  const st = { cwd: startHome, home: startHome, running: false, history: [], hIdx: null };
-  if (!USER_HOME) kernel.userHome(CURRENT_USER).then(h => { st.home = h; st.cwd = h; refreshPrompt(); });
+  const st = { cwd: (typeof w.arg === "string" && w.arg.startsWith("/")) ? w.arg : startHome, home: startHome, running: false, history: [], hIdx: null };
+  if (!USER_HOME) kernel.userHome(CURRENT_USER).then(h => { st.home = h; if (st.cwd === startHome) st.cwd = h; refreshPrompt(); });
 
   const disp = () => {
     if (st.cwd === st.home) return "~";
@@ -1090,6 +1098,7 @@ function buildExplorer(body, w) {
     bBack.disabled = st.idx <= 0;
     bFwd.disabled  = st.idx >= st.hist.length - 1;
     list.innerHTML = "";
+    const rows = [];
     for (const en of res.entries) {
       const row = document.createElement("div");
       row.className = "exp-row";
@@ -1128,8 +1137,10 @@ function buildExplorer(body, w) {
         }
       };
       list.appendChild(row);
+      rows.push({ row, en, full: fullPath() });
     }
     if (!res.entries.length) list.innerHTML = `<div class="sr-empty">Empty folder</div>`;
+    else EX.decorate({ list, st, rows, show, refresh, startRename, w, body });
   }
 
   const joinDir = (name) => {
@@ -1226,7 +1237,7 @@ function buildExplorer(body, w) {
     for (const [label, p] of marks) {
       const d = document.createElement("div");
       if (label === "-") { d.className = "exp-sep"; side.appendChild(d); continue; }
-      d.textContent = label;
+      d.textContent = label; d.dataset.path = p;
       d.onclick = () => show(p);
       side.appendChild(d);
     }
@@ -1238,12 +1249,12 @@ function buildExplorer(body, w) {
         if (!r || !r.ok) continue;
         for (const en of r.entries) if (en.isDir) found.push([en.name.replace(/^sf_/, "Shared: "), base + "/" + en.name]);
       }
-      if (!found.length) return;
-      const sep = document.createElement("div"); sep.className = "exp-sep"; side.appendChild(sep);
+      if (found.length) { const sep = document.createElement("div"); sep.className = "exp-sep"; side.appendChild(sep); }
       for (const [label, p] of found) {
         const d = document.createElement("div"); d.textContent = label; d.title = p;
-        d.onclick = () => show(p); side.appendChild(d);
+        d.dataset.path = p; d.onclick = () => show(p); side.appendChild(d);
       }
+      EX.sidebarExtras(side, show);
     })();
     show(typeof w.arg === "string" && w.arg ? w.arg : home);
   });
@@ -1311,6 +1322,8 @@ function openFileInOS(path) {
   if (window.EX && EX.openDefault(path)) return;
   const ext = (path.split(".").pop() || "").toLowerCase();
   const name = path.split(/[\\/]/).pop();
+
+  if (["mp4","webm","mkv","mov","m4v","ogv","mp3","wav","ogg","flac","m4a","aac","opus"].includes(ext)) { launch("player", path); return; }
 
   // Real programs: Windows .exe/.msi (Wine) and AppImages
   if (PROGRAM_EXT.includes(ext))            { runProgramFile(path); return; }
@@ -2105,7 +2118,7 @@ function buildLock() {
   }
   const pin = $("#lock-pin");
   pin.addEventListener("input", () => {
-    if (USERS[lockUser] && pin.value === USERS[lockUser].pin) trySubmitPin();   // longer PINs: press Enter
+    if (pin.value.length >= 4) EX.pinOk(lockUser, pin.value).then(ok => { if (ok) trySubmitPin(); });   // longer PINs: press Enter
   });
   pin.addEventListener("keydown", (e) => {
     e.stopPropagation();
@@ -2132,7 +2145,7 @@ function selectLockUser(name) {
 
 async function trySubmitPin() {
   const pin = $("#lock-pin");
-  if (pin.value !== USERS[lockUser].pin) {
+  if (!(await EX.pinOk(lockUser, pin.value))) {
     $("#lock-msg").textContent = "Wrong PIN — try again";
     const card = $(".lock-card");
     card.classList.remove("shake"); void card.offsetWidth;

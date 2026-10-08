@@ -50,10 +50,13 @@ rsync -a --chown=0:0 --exclude node_modules --exclude 'test*' "$HERE/shell/" "$R
 echo "### system overlay"
 rsync -a --chown=0:0 "$HERE/system/" "$ROOT/"
 chown -R 0:0 "$ROOT/etc/sudoers.d" "$ROOT/usr/local" "$ROOT/opt/trimangees"
+echo "${BUILD_ID:-$(date +%Y%m%d-%H%M)}" > "$ROOT/etc/trimangees-build"
 chmod 755 "$ROOT"/usr/local/bin/trimangees-* "$ROOT/usr/local/sbin/trifs"
 chmod 440 "$ROOT/etc/sudoers.d/trimangees"
 chmod 4755 "$ROOT/opt/trimangees/electron/chrome-sandbox" 2>/dev/null || true
 chroot "$ROOT" bash -c 'systemctl enable trifs-mount.service trimangees-session.service NetworkManager 2>&1 | tail -3; systemctl set-default graphical.target; hostname >/dev/null' || true
+chroot "$ROOT" update-alternatives --install /usr/share/plymouth/themes/default.plymouth default.plymouth /usr/share/plymouth/themes/trimangees/trimangees.plymouth 200 2>&1 | tail -1 || true
+chroot "$ROOT" update-alternatives --set default.plymouth /usr/share/plymouth/themes/trimangees/trimangees.plymouth 2>&1 | tail -1 || true
 chroot "$ROOT" update-initramfs -u -k all
 
 echo "### clean"

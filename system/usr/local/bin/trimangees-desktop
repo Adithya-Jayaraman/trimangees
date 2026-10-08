@@ -18,11 +18,31 @@ export ELECTRON_OZONE_PLATFORM_HINT=x11
 export ELECTRON_DISABLE_SECURITY_WARNINGS=1
 export ELECTRON_ENABLE_LOGGING=1
 
+BUILTIN=/opt/trimangees/shell
+OVERRIDE=/trifs/system/shell-override       # a desktop update installed from Settings → Desktop updates
+fails=0; SAFE=0
+
 # Keep the shell alive: if it quits (drive set-up restart, or a crash) start it again.
+# Three crashes in a row => safe mode (built-in desktop, saved settings ignored) and a bad update is put aside.
 while true; do
-  /opt/trimangees/electron/electron /opt/trimangees/shell --no-sandbox --class=trimangees-os
+  DIR=$BUILTIN
+  if [ "$SAFE" = 0 ] && [ -f "$OVERRIDE/main.js" ] && [ -f "$OVERRIDE/os.js" ]; then DIR=$OVERRIDE; fi
+  export TRIMANGEES_SAFE=$SAFE
+  echo "starting shell from $DIR (safe=$SAFE)"
+  t0=$(date +%s)
+  /opt/trimangees/electron/electron "$DIR" --no-sandbox --class=trimangees-os
   code=$?
-  echo "shell exited with code $code at $(date)"
+  dt=$(( $(date +%s) - t0 ))
+  echo "shell exited with code $code after ${dt}s at $(date)"
   [ -e /run/trimangees/stop ] && break
+  if [ "$code" != 0 ] && [ "$dt" -lt 25 ]; then
+    fails=$((fails+1))
+    if [ "$fails" -ge 3 ]; then
+      SAFE=1
+      if [ -d "$OVERRIDE" ]; then rm -rf "$OVERRIDE.bad"; mv "$OVERRIDE" "$OVERRIDE.bad"; echo "bad update put aside"; fi
+    fi
+  else
+    fails=0; [ "$dt" -gt 60 ] && SAFE=0
+  fi
   sleep 1
 done

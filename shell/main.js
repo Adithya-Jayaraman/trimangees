@@ -419,7 +419,7 @@ ipcMain.handle('apps:runWineApp', (e, { file }) => runner.runWineApp(file, curre
 ipcMain.handle('apps:runWineTool', (e, { args }) => runner.runWineTool(Array.isArray(args) ? args.map(String) : [String(args)], currentUser));
 ipcMain.handle('run:file', (e, { target }) => runner.runFile(target, currentUser));
 ipcMain.handle('run:chrome', (e, { url } = {}) => runner.runChrome(url, currentUser));
-ipcMain.handle('apps:has', () => ({ wine: !!runner.which('wine'), chrome: !!runner.chromeBin(), xterm: !!runner.which('xterm') }));
+ipcMain.handle('apps:has', () => ({ wine: !!runner.which('wine'), chrome: !!runner.chromeBin(), flatpak: !!runner.which('flatpak'), xterm: !!runner.which('xterm') }));
 
 ipcMain.handle('ext:list', () => extwin.list());
 ipcMain.handle('ext:activate', async (e, { id }) => { await extwin.activate(id); return true; });
@@ -445,6 +445,124 @@ ipcMain.handle('trifs:restart', () => {
 // ============================================================
 // Config + system info + power
 // ============================================================
+
+// ============================================================
+// Extra kernel features: file helpers, Linux apps, diagnostics,
+// backups, updates
+// ============================================================
+const { exec: cpExec } = require('child_process');
+const shq = (t) => "'" + String(t).replace(/'/g, "'\\''") + "'";
+const run = (cmd, timeout = 20000) => new Promise((resolve) =>
+  cpExec(cmd, { env: runner.envFor(currentUser || 'guest'), timeout, maxBuffer: 16 * 1024 * 1024, shell: '/bin/bash' },
+    (err, out, errout) => resolve({ ok: !err, out: out || '', err: errout || '', code: err ? (err.code || 1) : 0 })));
+const sysDir = (sub) => { const d = path.join(fsr.real('/system'), sub); try { fs.mkdirSync(d, { recursive: true }); } catch {} return d; };
+
+ipcMain.handle('fs:real', (e, { p }) => fsr.real(p));
+ipcMain.handle('fs:realMany', (e, { ps }) => (ps || []).map((p) => fsr.real(p)));
+ipcMain.handle('fs:unique', (e, { dir, name }) => fsr.uniqueChild(dir, name));
+ipcMain.handle('fs:move', (e, { from, to }) => { const r = fsr.rename(from, to); if (r.ok) fsChanged(); return r; });
+
+ipcMain.handle('apps:linux', () => { try { return runner.listLinuxApps(currentUser); } catch { return []; } });
+ipcMain.handle('run:linux', (e, { exec, terminal }) => runner.runLinuxApp(exec, terminal, currentUser));
+
+// a visible terminal window running one command (winetricks, flatpak installs ...)
+ipcMain.handle('sys:xtermRun', (e, { cmd, title }) => {
+  try {
+    const env = runner.envFor(currentUser || 'guest'); env.TERM = 'xterm';
+    const c = spawn('xterm', ['-fa', 'DejaVu Sans Mono', '-fs', '11', '-bg', '#0d1117', '-fg', '#e6edf3', '-T', title || 'TrimangeesOS',
+      '-e', 'bash', '-c', String(cmd) + '; echo; echo "--- finished. Press Enter to close ---"; read'],
+      { cwd: env.HOME, env, detached: true, stdio: 'ignore' });
+    c.on('error', () => {}); c.unref(); return { ok: true };
+  } catch (err) { return { ok: false, error: err.message }; }
+});
+ipcMain.handle('sys:restartShell', () => { if (inSession) setTimeout(() => app.exit(0), 300); return { ok: true, session: inSession }; });
+
+// ── diagnostics: one block of text the user can paste to me ──
+ipcMain.handle('sys:diag', async () => {
+  const parts = [
+    ['TrimangeesOS', null, `version ${app.getVersion()}  build ${(() => { try { return fs.readFileSync('/etc/trimangees-build', 'utf8').trim(); } catch { return 'dev'; } })()}  session=${inSession}  user=${currentUser}`],
+    ['kernel/mem', 'uname -a; cat /proc/cmdline; free -m'],
+    ['drives', 'lsblk -o NAME,SIZE,TYPE,FSTYPE,LABEL,MOUNTPOINTS 2>&1; df -h 2>&1 | head -20'],
+    ['trifs', 'sudo -n /usr/local/sbin/trifs status 2>&1; cat /run/trimangees/trifs.state 2>/dev/null'],
+    ['screen', 'xdpyinfo 2>/dev/null | grep -E "dimensions|version number"; xrandr 2>&1 | head -6; pgrep -a VBoxClient | head'],
+    ['network', 'nmcli -t dev 2>&1 | head; ip -brief addr 2>&1'],
+    ['wine/chrome', 'wine --version 2>&1; ls /opt/trimangees/wineprefix-template 2>&1 | head -3; google-chrome --version 2>&1 | head -1'],
+    ['shell log', 'tail -n 60 /var/log/trimangees/shell.log 2>&1'],
+    ['system warnings', 'journalctl -b -p warning --no-pager 2>&1 | tail -n 40'],
+    ['programs log', 'tail -n 30 ~/.cache/trimangees/programs.log 2>&1'],
+  ];
+  let text = `TrimangeesOS diagnostics  ${new Date().toISOString()}\n`;
+  for (const [title, cmd, raw] of parts) {
+    const r = cmd === null ? { out: raw, err: '' } : await run(cmd, 15000);
+    text += `\n===== ${title} =====\n${(r.out + r.err).slice(0, 6000).trim()}\n`;
+  }
+  try { fs.writeFileSync(path.join(sysDir('logs'), 'diag-' + Date.now() + '.txt'), text); } catch {}
+  return { ok: true, text };
+});
+
+// ── backups of a home folder (kept on TriFS, last 3) ─────────
+ipcMain.handle('backup:run', async (e, { user }) => {
+  user = user || currentUser; if (!user) return { ok: false, error: 'no user' };
+  const dir = sysDir('backups/' + user);
+  const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+  const zstd = !!runner.which('zstd');
+  const file = path.join(dir, `${stamp}.tar${zstd ? '.zst' : '.gz'}`);
+  const home = fsr.real('/home');
+  const ex = ['.cache', '.wine', '.local/share/flatpak', '.Trash', '.config/google-chrome/*/Cache', '.config/google-chrome/*/Code Cache']
+    .map((x) => `--exclude=${shq(user + '/' + x)}`).join(' ');
+  const r = await run(`nice -n 19 tar ${zstd ? '--zstd' : '-z'} -cf ${shq(file)} ${ex} -C ${shq(home)} ${shq(user)} 2>&1`, 20 * 60 * 1000);
+  if (!r.ok && !fs.existsSync(file)) return { ok: false, error: r.err || r.out };
+  try {   // keep the newest 3
+    const all = fs.readdirSync(dir).filter((f) => f.includes('.tar')).sort();
+    for (const old of all.slice(0, Math.max(0, all.length - 3))) fs.unlinkSync(path.join(dir, old));
+  } catch {}
+  return { ok: true, file, size: (() => { try { return fs.statSync(file).size; } catch { return 0; } })() };
+});
+ipcMain.handle('backup:list', (e, { user }) => {
+  const dir = sysDir('backups/' + (user || currentUser));
+  try { return fs.readdirSync(dir).filter((f) => f.includes('.tar')).sort().reverse().map((f) => ({ name: f, size: fs.statSync(path.join(dir, f)).size })); } catch { return []; }
+});
+ipcMain.handle('backup:restore', async (e, { user, name }) => {
+  user = user || currentUser;
+  const file = path.join(sysDir('backups/' + user), path.basename(name));
+  const dest = path.join(fsr.real('/home'), user, 'Restored-' + path.basename(name).split('.')[0]);
+  fs.mkdirSync(dest, { recursive: true });
+  const r = await run(`tar -xf ${shq(file)} -C ${shq(dest)} 2>&1`, 20 * 60 * 1000);
+  fsChanged();
+  return r.ok ? { ok: true, dest: fsr.virt ? fsr.virt(dest) : dest } : { ok: false, error: r.err || r.out };
+});
+
+// ── update the desktop from a zip file, without a new ISO ────
+ipcMain.handle('update:install', async (e, { zip }) => {
+  if (!inSession) return { ok: false, error: 'Updates install into the real OS (boot the ISO).' };
+  const src = fsr.real(zip);
+  const base = fsr.real('/system'), tmp = path.join(base, 'shell-update-tmp'), dest = path.join(base, 'shell-override');
+  const r1 = await run(`rm -rf ${shq(tmp)} && mkdir -p ${shq(tmp)} && unzip -q -o ${shq(src)} -d ${shq(tmp)} 2>&1`, 60000);
+  if (!r1.ok) return { ok: false, error: 'Could not open that zip. ' + (r1.err || r1.out).slice(0, 200) };
+  let root = tmp;                                  // allow the zip to hold a single top folder
+  const need = ['main.js', 'os.js', 'os.html', 'preload.js'];
+  if (!need.every((f) => fs.existsSync(path.join(root, f)))) {
+    const sub = fs.readdirSync(tmp).map((d) => path.join(tmp, d)).find((d) => need.every((f) => fs.existsSync(path.join(d, f))));
+    if (!sub) return { ok: false, error: "That zip doesn't look like a TrimangeesOS desktop update." };
+    root = sub;
+  }
+  const chk = await run(`node --check ${shq(path.join(root, 'main.js'))} 2>&1`, 20000).catch(() => ({ ok: true }));
+  await run(`rm -rf ${shq(dest + '.prev')}; [ -d ${shq(dest)} ] && mv ${shq(dest)} ${shq(dest + '.prev')}; mv ${shq(root)} ${shq(dest)}; rm -rf ${shq(tmp)}`, 60000);
+  return { ok: true };
+});
+ipcMain.handle('update:revert', async () => {
+  const base = fsr.real('/system');
+  await run(`rm -rf ${shq(path.join(base, 'shell-override'))}`, 30000);
+  return { ok: true };
+});
+ipcMain.handle('update:status', () => {
+  const base = fsr.real('/system');
+  const has = fs.existsSync(path.join(base, 'shell-override', 'main.js'));
+  let ver = '';
+  try { ver = JSON.parse(fs.readFileSync(path.join(base, 'shell-override', 'package.json'), 'utf8')).version; } catch {}
+  return { override: has, version: ver, running: __dirname, safe: process.env.TRIMANGEES_SAFE === '1' };
+});
+
 ipcMain.handle('cfg:get', () => loadConfig());
 ipcMain.handle('cfg:set', (e, cfg) => { saveConfig(cfg); return true; });
 
