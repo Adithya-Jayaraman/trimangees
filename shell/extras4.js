@@ -226,19 +226,26 @@
   // ============================================================
   addSection("Desktop updates", async (main, again, H) => {
     const s = await kernel.updateStatus();
-    main.innerHTML = H("Small fixes can be installed without downloading the whole ISO again.") +
+    main.innerHTML = H(IS_MAX
+        ? "On TriOS MAX, you can also just drag a .triupdate file anywhere onto the desktop — it updates everything (and any new coding tools it carries) in one go while your drive is left alone."
+        : "Small fixes can be installed without downloading the whole ISO again.") +
       row("Status", s.safe ? "Safe mode is on (the desktop crashed a few times)." : "", s.override ? `Using an update${s.version ? " (" + esc(s.version) + ")" : ""}` : "Built-in version") +
-      `<div class="set-row-btns"><button class="set-btn primary" id="up-get">Get the latest update from GitHub</button><button class="set-btn" id="up-file">Choose a shell-update.zip…</button>${s.override ? '<button class="set-btn" id="up-rev">Go back to the built-in version</button>' : ""}</div>
+      `<div class="set-row-btns"><button class="set-btn primary" id="up-get">Get the latest update from GitHub</button><button class="set-btn" id="up-file">Choose a ${IS_MAX ? ".triupdate" : "shell-update.zip"}…</button>${s.override ? '<button class="set-btn" id="up-rev">Go back to the built-in version</button>' : ""}</div>
        <div id="up-o" class="set-note"></div>`;
     const o = main.querySelector("#up-o");
-    const done = async (r) => { if (!r.ok) { o.textContent = "Failed: " + r.error; return; } o.textContent = "Installed. Restarting the desktop…"; setTimeout(() => kernel.restartShell(), 800); };
+    const done = async (r) => {
+      if (!r.ok) { o.textContent = "Failed: " + r.error; return; }
+      o.textContent = (r.packages && r.packages.installed.length ? `Installed ${r.packages.installed.length} new package(s). ` : "") + "Restarting the desktop…";
+      setTimeout(() => kernel.restartShell(), 800);
+    };
     main.querySelector("#up-get").onclick = async () => {
       o.textContent = "Downloading…"; const dl = (USER_HOME || "/home/" + CURRENT_USER) + "/Downloads"; await kernel.mkdir(dl);
-      const r = await sh(`curl -fL --max-time 120 -o ${q(dl + "/shell-update.zip")} https://github.com/Adithya-Jayaraman/trimangees/releases/latest/download/shell-update.zip 2>&1`, 130000);
-      if (!r.ok) { o.textContent = "Could not download (is the repo private, or the internet off?). You can download shell-update.zip yourself and use 'Choose a file'."; return; }
-      o.textContent = "Installing…"; done(await kernel.updateInstall(dl + "/shell-update.zip"));
+      const name = IS_MAX ? "TriOS-MAX.triupdate" : "shell-update.zip";
+      const r = await sh(`curl -fL --max-time 120 -o ${q(dl + "/" + name)} https://github.com/Adithya-Jayaraman/trimangees/releases/latest/download/${name} 2>&1`, 130000);
+      if (!r.ok) { o.textContent = "Could not download (is the repo private, or the internet off?). You can download the update file yourself and use 'Choose a file'."; return; }
+      o.textContent = "Installing…"; done(await kernel.updateInstall(dl + "/" + name));
     };
-    main.querySelector("#up-file").onclick = () => { const f = document.createElement("input"); f.type = "file"; f.accept = ".zip"; f.onchange = async () => { if (!f.files[0]) return; o.textContent = "Installing…"; done(await kernel.updateInstall(kernel.pathOf(f.files[0]))); }; f.click(); };
+    main.querySelector("#up-file").onclick = () => { const f = document.createElement("input"); f.type = "file"; f.accept = ".zip,.triupdate"; f.onchange = async () => { if (!f.files[0]) return; o.textContent = "Installing…"; done(await kernel.updateInstall(kernel.pathOf(f.files[0]))); }; f.click(); };
     const rv = main.querySelector("#up-rev"); if (rv) rv.onclick = async () => { await kernel.updateRevert(); o.textContent = "Reverted. Restarting…"; setTimeout(() => kernel.restartShell(), 800); };
   });
 

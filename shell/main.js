@@ -547,8 +547,20 @@ ipcMain.handle('update:install', async (e, { zip }) => {
     root = sub;
   }
   const chk = await run(`node --check ${shq(path.join(root, 'main.js'))} 2>&1`, 20000).catch(() => ({ ok: true }));
+  // TriOS MAX .triupdate files can also carry extra .deb packages (new coding
+  // tools, etc.) in a packages/ folder — installed before the shell swap, so
+  // TriFS (your files) is never touched either way.
+  const pkgDir = path.join(root, 'packages');
+  let pkgResult = null;
+  if (fs.existsSync(pkgDir)) {
+    const debs = fs.readdirSync(pkgDir).filter((f) => f.endsWith('.deb'));
+    if (debs.length) {
+      const r2 = await run(`sudo -n dpkg -i ${debs.map((f) => shq(path.join(pkgDir, f))).join(' ')} 2>&1; sudo -n apt-get -y -f install 2>&1`, 10 * 60 * 1000);
+      pkgResult = { installed: debs, ok: r2.ok };
+    }
+  }
   await run(`rm -rf ${shq(dest + '.prev')}; [ -d ${shq(dest)} ] && mv ${shq(dest)} ${shq(dest + '.prev')}; mv ${shq(root)} ${shq(dest)}; rm -rf ${shq(tmp)}`, 60000);
-  return { ok: true };
+  return { ok: true, packages: pkgResult };
 });
 ipcMain.handle('update:revert', async () => {
   const base = fsr.real('/system');
@@ -570,6 +582,18 @@ const LITE_FLAG = '/etc/trimangees-lite';
 let isLite = false;
 try { isLite = fs.existsSync(LITE_FLAG) || process.env.TRIMANGEES_LITE === '1'; } catch {}
 ipcMain.handle('sys:lite', () => isLite);
+
+// TriOS MAX: every account picks its own drive, independent of the others.
+const MAX_FLAG = '/etc/trimangees-max';
+let isMax = false;
+try { isMax = fs.existsSync(MAX_FLAG) || process.env.TRIMANGEES_MAX === '1'; } catch {}
+ipcMain.handle('sys:max', () => isMax);
+ipcMain.handle('trifs:userScan', () => trifs.userScan());
+ipcMain.handle('trifs:userAssign', (e, { user, dev }) => trifs.userAssign(user, dev));
+ipcMain.handle('trifs:userMount', (e, { user }) => trifs.userMount(user));
+ipcMain.handle('trifs:userMountAll', () => trifs.userMountAll());
+ipcMain.handle('trifs:userStatus', () => trifs.userStatus());
+ipcMain.handle('trifs:userUnassign', (e, { user }) => trifs.userUnassign(user));
 
 // ── AI calls go through the main process (keys never touch a renderer
 // page that could leak them to a webview; also avoids CORS entirely) ──

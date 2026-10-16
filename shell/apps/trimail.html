@@ -122,6 +122,27 @@ const MAX_FILE = 700_000;
 
 let me = null, folder = 'inbox', selectedKey = null, mails = {};
 
+// ── Local-first: folders render instantly from a local mirror, and
+// sends/reads/deletes are queued and retried, so mail fully works offline. ──
+function genKey(){ return Date.now().toString().padStart(13,'0') + '_' + Math.random().toString(36).slice(2,8); }
+const localMailKey = (user, f) => 'trimail-' + f + '-' + user;
+function loadLocalMail(user, f){ try { return JSON.parse(localStorage.getItem(localMailKey(user, f)) || '{}'); } catch { return {}; } }
+function saveLocalMail(user, f, obj){ try { localStorage.setItem(localMailKey(user, f), JSON.stringify(obj)); } catch {} }
+const outboxKey = () => 'trimail-outbox-' + me;
+function loadOutbox(){ try { return JSON.parse(localStorage.getItem(outboxKey()) || '[]'); } catch { return []; } }
+function saveOutbox(ob){ try { localStorage.setItem(outboxKey(), JSON.stringify(ob)); } catch {} }
+function queueWrite(path, value){
+  const ob = loadOutbox(); ob.push({ path, value }); saveOutbox(ob);
+  trySendOne(path, value);
+}
+async function trySendOne(path, value){
+  try { await db.ref(path).set(value); saveOutbox(loadOutbox().filter(o => o.path !== path)); }
+  catch (e) { /* offline — stays queued, retried by flushOutbox() */ }
+}
+function flushOutbox(){ if (me) loadOutbox().forEach(o => trySendOne(o.path, o.value)); }
+window.addEventListener('online', flushOutbox);
+setInterval(flushOutbox, 15000);
+
 document.querySelectorAll('.accountBtn').forEach(btn => {
   btn.onclick = () => {
     me = btn.dataset.account;
@@ -130,6 +151,7 @@ document.querySelectorAll('.accountBtn').forEach(btn => {
     el('meLabel').textContent = me;
     el('cTo').innerHTML = PEOPLE.filter(p => p !== me).map(p => `<option>${p}</option>`).join('') + '<option>Everyone</option>';
     goFolder('inbox');
+    flushOutbox();
   };
 });
 el('switchAcct').onclick = () => { me = null; el('app').classList.remove('on'); el('loginScreen').style.display = 'flex'; };
@@ -141,15 +163,18 @@ function goFolder(f){
   selectedKey = null;
   el('reader').innerHTML = '<div id="readerEmpty">Select a message</div>';
   const path = f === 'inbox' ? 'trimail/inbox/' + me : 'trimail/sent/' + me;
+  mails = loadLocalMail(me, f); renderList(); updateUnread();   // instant, works offline
   db.ref(path).off();
-  db.ref(path).on('value', snap => { mails = snap.val() || {}; renderList(); updateUnread(); });
+  db.ref(path).on('value', snap => {
+    mails = snap.val() || {};
+    saveLocalMail(me, f, mails);
+    renderList(); updateUnread();
+  });
 }
 function updateUnread(){
-  db.ref('trimail/inbox/' + me).once('value').then(snap => {
-    const v = snap.val() || {};
-    const n = Object.values(v).filter(m => !m.read).length;
-    el('unreadCount').textContent = n ? n : '';
-  });
+  const v = loadLocalMail(me, 'inbox');
+  const n = Object.values(v).filter(m => !m.read).length;
+  el('unreadCount').textContent = n ? n : '';
 }
 
 function fmtTime(ts){ const d = new Date(ts); return d.toLocaleDateString([], {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
@@ -176,8 +201,9 @@ function openMail(k, m, row){
   document.querySelectorAll('.mailRow').forEach(r => r.classList.remove('active'));
   row.classList.add('active');
   if (folder === 'inbox' && !m.read) {
-    db.ref('trimail/inbox/' + me + '/' + k + '/read').set(true);
-    m.read = true; row.classList.remove('unread'); updateUnread();
+    queueWrite('trimail/inbox/' + me + '/' + k + '/read', true);
+    m.read = true; mails[k] = m; saveLocalMail(me, 'inbox', mails);
+    row.classList.remove('unread'); updateUnread();
   }
   let att = m.file ? `<div class="attRow" id="attDl">&#128206; ${esc(m.file.name)} (${Math.round(m.file.size/1024)} KB)</div>` : '';
   el('reader').innerHTML = `<div id="rSubj">${esc(m.subject || '(no subject)')}</div>
@@ -188,7 +214,9 @@ function openMail(k, m, row){
   const rr = el('rReply'); if (rr) rr.onclick = () => openCompose(m.from, 'Re: ' + (m.subject || ''));
   el('rDel').onclick = () => {
     const path = folder === 'inbox' ? 'trimail/inbox/' + me + '/' + k : 'trimail/sent/' + me + '/' + k;
-    db.ref(path).remove();
+    queueWrite(path, null);   // .set(null) deletes the node once it syncs
+    delete mails[k]; saveLocalMail(me, folder, mails);
+    renderList();
     el('reader').innerHTML = '<div id="readerEmpty">Select a message</div>';
   };
 }
@@ -210,9 +238,13 @@ el('cSend').onclick = () => {
     const ts = Date.now();
     for (const r of recipients) {
       const mail = { from: me, to: r, subject, body, ts, read: false, file: fileObj || null };
-      db.ref('trimail/inbox/' + r).push(mail);
+      queueWrite('trimail/inbox/' + r + '/' + genKey(), mail);
     }
-    db.ref('trimail/sent/' + me).push({ from: me, to, subject, body, ts, file: fileObj || null });
+    const sentKey = genKey(), sentMail = { from: me, to, subject, body, ts, file: fileObj || null };
+    queueWrite('trimail/sent/' + me + '/' + sentKey, sentMail);
+    // reflect in my own Sent folder immediately, online or not
+    const localSent = loadLocalMail(me, 'sent'); localSent[sentKey] = sentMail; saveLocalMail(me, 'sent', localSent);
+    if (folder === 'sent') { mails = localSent; renderList(); }
     el('composeOv').classList.remove('on');
   };
   if (f) {

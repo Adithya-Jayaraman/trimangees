@@ -52,6 +52,140 @@ const BUILT_IN_APPS = [
   { id: "editor",    name: "Text Editor",  color: "#c8a04a", letter: "E", builtin: true, hidden: true },
 ];
 let IS_LITE = false;   // set at boot from the ISO's /etc/trimangees-lite marker
+let IS_MAX = false;    // set at boot from the ISO's /etc/trimangees-max marker — each account gets its own drive
+let udwSkipped = {};   // per-session "don't ask again this login" for the per-user drive wizard
+const PLACEHOLDER_PROJECTS = [
+  ["Trimangees Suite",   "TRiDOCS, TRiSHEETS, TRiSLIDES, TRiDRAW — the office apps, already in this OS."],
+  ["SONAR Rover",        "PiCar-X / Raspberry Pi rover project."],
+  ["Cloud Book",         "The cloud-science / storm-spotting textbook."],
+  ["Energy Heroes",      "The Flutter/Dart gamified energy app for kids."],
+  ["Trimangeepedia",     "The Trimangees encyclopedia website."],
+  ["TriMind",            "The from-scratch neural network that learns digits, drawn live."],
+  ["Adithya's Universe", "The physics sandbox / personal fictional universe."],
+  ["Cube-Grabbing Robot","The autonomous colour-tracking robot-arm project."],
+  ["Wearables Paper",    "The RoboHolics ultra-low-cost wearables research paper."],
+];
+// Pre-create a few named, clearly-marked placeholder folders so Adithya's
+// account doesn't feel empty on a brand-new drive. Real project files are
+// never baked in — these are just README stubs to drop the real thing into.
+async function seedPlaceholders(user) {
+  if (user !== "Adithya" || CFG.placeholdersSeeded) return;
+  try {
+    for (const [name, blurb] of PLACEHOLDER_PROJECTS) {
+      const dir = `${USER_HOME}/${name}`;
+      await kernel.mkdir(dir);
+      await kernel.writeFile(`${dir}/README.txt`,
+        `${name}\n${"=".repeat(name.length)}\n\n${blurb}\n\nThis is a placeholder folder — drop your real project files here.`);
+    }
+    CFG.placeholdersSeeded = true;
+    await kernel.setConfig(CFG);
+  } catch {}
+}
+// TriOS MAX: drop a .triupdate file anywhere on the desktop to update the
+// whole system in one shot. Per-account drives are separate partitions, so
+// this never touches anyone's files either way.
+document.addEventListener("dragover", (e) => { if (IS_MAX) e.preventDefault(); });
+document.addEventListener("drop", async (e) => {
+  if (!IS_MAX) return;
+  const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!file || !/\.triupdate$/i.test(file.name)) return;
+  e.preventDefault(); e.stopPropagation();
+  const p = (kernel.pathOf && kernel.pathOf(file)) || file.path;
+  if (p) runTriUpdate(p);
+}, true);
+async function runTriUpdate(filePath) {
+  const ov = document.createElement("div"); ov.id = "triupdate-ov";
+  Object.assign(ov.style, { position: "fixed", inset: "0", background: "rgba(10,8,18,.92)", zIndex: 999999,
+    display: "flex", alignItems: "center", justifyContent: "center" });
+  ov.innerHTML = `<div class="tw-card" style="text-align:center">
+    <div class="tw-title">Updating TriOS MAX…</div>
+    <div class="tw-sub">Your files are safe — each account's drive is its own partition and isn't touched.</div>
+    <div class="tw-spin"></div></div>`;
+  document.body.appendChild(ov);
+  const r = await kernel.updateInstall(filePath).catch((e) => ({ ok: false, error: String(e) }));
+  const card = ov.querySelector(".tw-card");
+  if (r && r.ok) {
+    const pkgNote = r.packages && r.packages.installed && r.packages.installed.length
+      ? `<div class="tw-sub">Installed ${r.packages.installed.length} new package(s) too.</div>` : "";
+    card.innerHTML = `<div class="tw-title">Update installed</div>${pkgNote}<div class="tw-sub">Restarting…</div><div class="tw-spin"></div>`;
+    setTimeout(() => kernel.restartShell(), 1200);
+  } else {
+    card.innerHTML = `<div class="tw-title">Update failed</div><div class="tw-sub">${(r && r.error) || "Something went wrong."}</div>
+      <button class="set-btn" id="tu-close">Close</button>`;
+    card.querySelector("#tu-close").onclick = () => ov.remove();
+  }
+}
+// TriOS MAX: make sure this account has its own drive, asking for one if not.
+async function ensureUserDrive(user) {
+  if (udwSkipped[user]) return;
+  try {
+    const st = await kernel.trifsUserStatus();
+    const have = st && st.ok !== false && st.drives && st.drives[user];
+    if (!have) { await showUserDriveWizard(user); return; }
+    const r = await kernel.trifsUserMount(user);
+    if (r && r.ok && r.mounted) { seedPlaceholders(user); return; }
+    if (r && r.ok && !r.mounted) {
+      toast(`${user}'s drive`, r.reason === "drive not plugged in"
+        ? `Plug in "${have.label}" to see your files this session.`
+        : "Couldn't connect your drive right now.");
+    }
+  } catch {}
+}
+let udwEl = null;
+async function showUserDriveWizard(user) {
+  if (!udwEl) { udwEl = document.createElement("div"); udwEl.id = "userdrive-setup"; osAppend(udwEl); }
+  udwEl.hidden = false;
+  udwEl.innerHTML = `<div class="tw-card"><div class="tw-title">${user}'s drive</div>
+    <div class="tw-sub">Looking for drives you can use…</div><div class="tw-spin"></div></div>`;
+  const scan = await kernel.trifsUserScan().catch(() => ({ ok: false, error: "couldn't scan" }));
+  renderUserDriveWizard(user, scan);
+}
+function renderUserDriveWizard(user, scan, note) {
+  const card = document.createElement("div"); card.className = "tw-card";
+  const drives = (scan && scan.drives) || [];
+  let html = `<div class="tw-title">Choose ${user}'s drive</div>
+    <div class="tw-sub">Each account on TriOS MAX keeps its files on its own drive — pick one just for ${user}.
+      It can be an external drive, a pendrive, or a spare internal disk, and it won't touch anyone else's.</div>`;
+  if (note) html += `<div class="tw-note ${note.err ? "err" : ""}">${note.text}</div>`;
+  if (!scan || scan.ok === false) html += `<div class="tw-note err">${(scan && scan.error) || "The drive manager isn't available."}</div>`;
+  const already = drives.filter(d => !d.blank), blank = drives.filter(d => d.blank);
+  if (already.length) {
+    html += `<div class="tw-h">Drives already set up <small>used as-is, nothing is erased</small></div>` + already.map(d => `
+      <div class="tw-row"><div><b>${d.label || d.dev}</b><span>${(d.fstype || "").toUpperCase()} &middot; ${d.dev}</span></div>
+      <button class="set-btn primary" data-use="${d.dev}">Use for ${user}</button></div>`).join("");
+  }
+  if (blank.length) {
+    html += `<div class="tw-h">Blank disks <small>formatted as exFAT — readable on Windows/Mac directly</small></div>` + blank.map(d => `
+      <div class="tw-row"><div><b>${d.model || "Disk"}</b><span>${twFmt(d.size)} &middot; ${d.dev}</span></div>
+      <button class="set-btn primary" data-use="${d.dev}">Use this disk</button></div>`).join("");
+  }
+  if (!already.length && !blank.length && scan && scan.ok !== false) {
+    html += `<div class="tw-note">No free drive found for ${user} yet. Plug one in, then scan again.</div>`;
+  }
+  html += `<div class="tw-foot">
+      <button class="set-btn" id="udw-rescan">Scan again</button>
+      <button class="set-btn" id="udw-skip">Continue without a drive for now</button></div>`;
+  card.innerHTML = html;
+  udwEl.innerHTML = ""; udwEl.appendChild(card);
+
+  const busy = (text) => { card.innerHTML = `<div class="tw-title">Setting up…</div><div class="tw-sub">${text}</div><div class="tw-spin"></div>`; };
+  card.querySelectorAll("[data-use]").forEach(b => b.onclick = async () => {
+    busy(`Setting up ${user}'s drive. This takes a few seconds…`);
+    const r = await kernel.trifsUserAssign(user, b.dataset.use);
+    if (r && r.ok) {
+      card.innerHTML = `<div class="tw-title">${user}'s drive is ready</div><div class="tw-sub">Labelled ${r.label}. Plug this drive into Windows or Mac and you'll see ${user}'s files directly — no conversion needed.</div>`;
+      udwSkipped[user] = true;
+      setTimeout(() => { udwEl.hidden = true; seedPlaceholders(user); }, 1600);
+    } else {
+      renderUserDriveWizard(user, await kernel.trifsUserScan(), { err: true, text: (r && r.error) || "Something went wrong." });
+    }
+  });
+  card.querySelector("#udw-rescan").onclick = () => showUserDriveWizard(user);
+  card.querySelector("#udw-skip").onclick = () => {
+    udwSkipped[user] = true; udwEl.hidden = true;
+    toast("Temporary session", `Nothing will be saved for ${user} yet. Set up a drive any time in Settings → My drive.`);
+  };
+}
 let APPS = BUILT_IN_APPS.map(a => ({ ...a }));       // grows when cloud apps load
 const DEFAULT_PINNED = ["explorer", "browser", "chrome", "terminal", "tridocs", "trisheets", "trislides", "mayfly"];
 let PINNED = [...DEFAULT_PINNED];
@@ -2168,6 +2302,7 @@ async function completeLogin(user) {
   CURRENT_USER = user;
   USER_HOME = await kernel.userHome(user);
   kernel.setUser?.(user);             // route downloads + resolve ~ to this user
+  if (IS_MAX) ensureUserDrive(user).catch(() => {});   // each account's own drive, not shared
   CFG.lastUser = user;
   getUserCfg();                       // ensure per-user theme exists
   await cloudPull(user);              // best-effort theme sync from Firebase
@@ -2319,7 +2454,9 @@ async function maybeTriFSWizard() {
 // ============================================================
 (async function boot() {
   try { IS_LITE = await kernel.isLite(); } catch {}
+  try { IS_MAX = await kernel.isMax(); } catch {}
   document.body.classList.toggle("lite", IS_LITE);
+  document.body.classList.toggle("max", IS_MAX);
   CFG = migrateConfig(await kernel.getConfig());
   applyPrefs();
   osApplyThemeGuest();

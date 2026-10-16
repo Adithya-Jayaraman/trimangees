@@ -47,4 +47,12 @@ module.exports = {
   createImg: (part, gb) => run(['create-img', String(part), String(Math.floor(Number(gb)))]),
   unmount: () => run(['unmount'], 60000),
   unmountSync: () => runSync(['unmount'], 30000),
+
+  // TriOS MAX: each account picks its own drive, independent of the others.
+  userScan:      ()              => usable() ? run(['user-scan'], 120000) : Promise.resolve({ ok: true, drives: [] }),
+  userAssign:    (user, dev)     => run(['user-assign', String(user), String(dev)], 5 * 60 * 1000),
+  userMount:     (user)          => usable() ? run(['user-mount', String(user)], 60000) : Promise.resolve({ ok: true, user, mounted: true, dev: true }),
+  userMountAll:  ()              => run(['user-mount-all'], 120000),
+  userStatus:    ()              => usable() ? run(['user-status'], 20000) : Promise.resolve({ ok: true, drives: {} }),
+  userUnassign:  (user)          => run(['user-unassign', String(user)]),
 };

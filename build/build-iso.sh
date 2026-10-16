@@ -12,6 +12,7 @@ VOLID="${VOLID:-TRIMANGEESOS}"
 ISONAME="${ISONAME:-TrimangeesOS}"
 EXTRA_APT="${EXTRA_APT:-}"
 LITE_FLAG="${LITE_FLAG:-0}"
+MAX_FLAG="${MAX_FLAG:-0}"
 ROOT="$WORK/rootfs"
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo)"; exit 1; }
 
@@ -36,7 +37,7 @@ cp /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true
 cp "$HERE/build/chroot-setup.sh" "$ROOT/root/chroot-setup.sh"
 if [ ! -f "$ROOT/.setup-done" ]; then
   echo "### chroot setup (this is the long part)"
-  chroot "$ROOT" env MIRROR="$MIRROR" EXTRA_APT="$EXTRA_APT" LITE_FLAG="$LITE_FLAG" bash /root/chroot-setup.sh
+  chroot "$ROOT" env MIRROR="$MIRROR" EXTRA_APT="$EXTRA_APT" LITE_FLAG="$LITE_FLAG" MAX_FLAG="$MAX_FLAG" bash /root/chroot-setup.sh
   touch "$ROOT/.setup-done"
 fi
 

@@ -123,6 +123,11 @@ fi
 if [ "${LITE_FLAG:-0}" = 1 ]; then
   echo 1 > /etc/trimangees-lite
 fi
+if [ "${MAX_FLAG:-0}" = 1 ]; then
+  echo 1 > /etc/trimangees-max
+  mkdir -p /etc/trimangees
+  [ -s /etc/trimangees/user-drives.json ] || echo '{}' > /etc/trimangees/user-drives.json
+fi
 
 say "locale, time zone, hostname"
 sed -i 's/^# *\(en_US.UTF-8\)/\1/; s/^# *\(en_IN\)/\1/' /etc/locale.gen

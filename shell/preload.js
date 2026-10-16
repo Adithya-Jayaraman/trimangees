@@ -97,6 +97,15 @@ contextBridge.exposeInMainWorld('kernel', {
   trifsUnmount:   ()          => ipcRenderer.invoke('trifs:unmount'),
   trifsRestart:   ()          => ipcRenderer.invoke('trifs:restart'),
 
+  // TriOS MAX: per-account drives
+  isMax:              ()           => ipcRenderer.invoke('sys:max'),
+  trifsUserScan:      ()           => ipcRenderer.invoke('trifs:userScan'),
+  trifsUserAssign:    (user, dev)  => ipcRenderer.invoke('trifs:userAssign', { user, dev }),
+  trifsUserMount:     (user)       => ipcRenderer.invoke('trifs:userMount', { user }),
+  trifsUserMountAll:  ()           => ipcRenderer.invoke('trifs:userMountAll'),
+  trifsUserStatus:    ()           => ipcRenderer.invoke('trifs:userStatus'),
+  trifsUserUnassign:  (user)       => ipcRenderer.invoke('trifs:userUnassign', { user }),
+
   // Firebase Storage (listed in the main process to skip CORS)
   storageList: (bucket, prefix) => ipcRenderer.invoke('storage:list', { bucket, prefix }),
   storageUpload: (opts) => ipcRenderer.invoke('storage:upload', opts),

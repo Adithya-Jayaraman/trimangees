@@ -119,6 +119,19 @@ async function geocode(q){
   return null;
 }
 
+// ── Offline cache: the last successful forecast is kept so there's always
+// something to show, even with no signal — "pocket OS" shouldn't go blank. ──
+const CACHE_KEY = 'triweather-cache';
+function saveCache(place, data){ try { localStorage.setItem(CACHE_KEY, JSON.stringify({ place, data, savedAt: Date.now() })); } catch {} }
+function loadCache(){ try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } }
+function fmtAgo(ts){
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + ' min ago';
+  const hrs = Math.round(mins / 60);
+  return hrs < 24 ? hrs + ' hr ago' : Math.round(hrs / 24) + ' day(s) ago';
+}
+
 async function load(){
   el('loading').style.display = 'block'; el('content').style.display = 'none';
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
@@ -127,19 +140,25 @@ async function load(){
     `&timezone=auto&forecast_days=2`;
   let data;
   try { data = await (await fetch(url)).json(); }
-  catch (e) { el('loading').textContent = "Couldn't reach the weather service — check the internet connection."; return; }
+  catch (e) {
+    const cached = loadCache();
+    if (cached) { render(cached.data, cached.savedAt, cached.place); return; }
+    el('loading').textContent = "Couldn't reach the weather service, and there's nothing saved yet for this place.";
+    return;
+  }
   if (!data || !data.current) { el('loading').textContent = "No weather data for that place."; return; }
+  saveCache(place, data);
   render(data);
 }
 
-function render(d){
+function render(d, cachedAt, cachedPlace){
   el('loading').style.display = 'none'; el('content').style.display = 'block';
   const c = d.current;
   const [desc, icon] = wInfo(c.weather_code);
   el('nowIcon').textContent = icon;
   el('nowTemp').innerHTML = Math.round(c.temperature_2m) + '&deg;C';
   el('nowDesc').textContent = desc;
-  el('nowPlace').textContent = place;
+  el('nowPlace').textContent = (cachedPlace || place) + (cachedAt ? ` — last updated ${fmtAgo(cachedAt)} (offline)` : '');
   el('tFeels').textContent = Math.round(c.apparent_temperature) + '°C';
   el('tHum').textContent = c.relative_humidity_2m + '%';
   el('tWind').textContent = Math.round(c.wind_speed_10m) + ' km/h';

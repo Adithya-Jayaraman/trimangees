@@ -119,6 +119,37 @@ let me = null, room = 'family', msgsRef = null, typingRef = null, presenceRef = 
 function roomPath(r){ return 'chattrimangees/rooms/' + r + '/messages'; }
 function dmRoom(a,b){ return 'dm_' + [a,b].sort().join('_'); }
 
+// ── Local-first: messages render instantly from a local mirror, sends are
+// queued and retried, so chat fully works offline and nothing is lost if
+// the OS is closed before a message makes it out. ──────────────────────
+function genKey(){ return Date.now().toString().padStart(13,'0') + '_' + Math.random().toString(36).slice(2,8); }
+const localMsgsKey = r => 'chatmsgs-' + r;
+function loadLocalMsgs(r){ try { return JSON.parse(localStorage.getItem(localMsgsKey(r)) || '[]'); } catch { return []; } }
+function saveLocalMsg(r, key, m){
+  try {
+    const arr = loadLocalMsgs(r);
+    if (arr.some(x => x.key === key)) return;
+    arr.push({ key, m }); if (arr.length > 300) arr.shift();
+    localStorage.setItem(localMsgsKey(r), JSON.stringify(arr));
+  } catch {}
+}
+const outboxKey = () => 'chat-outbox-' + me;
+function loadOutbox(){ try { return JSON.parse(localStorage.getItem(outboxKey()) || '[]'); } catch { return []; } }
+function saveOutbox(ob){ try { localStorage.setItem(outboxKey(), JSON.stringify(ob)); } catch {} }
+function queueSend(r, key, payload){
+  const ob = loadOutbox(); ob.push({ room: r, key, payload }); saveOutbox(ob);
+  trySendOne(r, key, payload);
+}
+async function trySendOne(r, key, payload){
+  try {
+    await db.ref(roomPath(r) + '/' + key).set(payload);
+    saveOutbox(loadOutbox().filter(o => o.key !== key));
+  } catch (e) { /* offline — stays queued, retried by flushOutbox() */ }
+}
+function flushOutbox(){ if (me) loadOutbox().forEach(o => trySendOne(o.room, o.key, o.payload)); }
+window.addEventListener('online', flushOutbox);
+setInterval(flushOutbox, 15000);
+
 document.querySelectorAll('.accountBtn').forEach(btn => {
   btn.onclick = () => {
     me = btn.dataset.account;
@@ -129,6 +160,7 @@ document.querySelectorAll('.accountBtn').forEach(btn => {
     renderDms();
     goRoom('family', 'Family');
     setupPresence();
+    flushOutbox();
   };
 });
 el('switchAcct').onclick = () => {
@@ -160,6 +192,7 @@ function goRoom(r, title){
   if (msgsRef) msgsRef.off();
   if (typingRef) typingRef.off();
   el('msgs').innerHTML = '';
+  loadLocalMsgs(r).forEach(({ key, m }) => addMsg(key, m));   // instant, works offline
   msgsRef = db.ref(roomPath(r)).limitToLast(200);
   msgsRef.on('child_added', snap => addMsg(snap.key, snap.val()));
   typingRef = db.ref('chattrimangees/typing/' + r);
@@ -178,8 +211,10 @@ function linkify(text){
 }
 
 function addMsg(key, m){
+  if (el('msgs').querySelector(`[data-msgkey="${key}"]`)) return;   // already shown (optimistic echo or local replay)
   el('empty').remove && el('empty').style && (el('empty').style.display = 'none');
   const row = document.createElement('div');
+  row.dataset.msgkey = key;
   row.className = 'msgRow' + (m.from === me ? ' mine' : '');
   let body = m.text ? `<div>${linkify(m.text)}</div>` : '';
   if (m.file) body += `<div class="fileChip" data-key="${key}">&#128196; <span>${esc(m.file.name)}</span> <span style="color:var(--dimmer)">(${Math.round(m.file.size/1024)} KB)</span></div>`;
@@ -187,8 +222,9 @@ function addMsg(key, m){
   if (m.file) row.querySelector('.fileChip').onclick = () => downloadFile(m.file);
   el('msgs').appendChild(row);
   el('msgs').scrollTop = el('msgs').scrollHeight;
+  saveLocalMsg(room, key, m);
   // read receipt (best-effort — not shown as a UI yet, just recorded)
-  if (m.from !== me) db.ref(roomPath(room) + '/' + key + '/readBy/' + me).set(true);
+  if (m.from !== me) db.ref(roomPath(room) + '/' + key + '/readBy/' + me).set(true).catch(() => {});
 }
 
 function downloadFile(f){
@@ -213,7 +249,9 @@ el('sendBtn').onclick = send;
 function send(){
   const text = el('msgInput').value.trim();
   if (!text) return;
-  db.ref(roomPath(room)).push({ from: me, text, ts: Date.now() });
+  const key = genKey(), payload = { from: me, text, ts: Date.now() };
+  addMsg(key, payload);             // shows instantly, online or not
+  queueSend(room, key, payload);    // sent now if online, retried later if not
   el('msgInput').value = ''; el('msgInput').style.height = 'auto';
   setTyping(false);
 }
@@ -224,7 +262,9 @@ el('fileInput').onchange = () => {
   if (f.size > MAX_FILE) { alert('That file is too big to share here (keep it under ~700 KB). Use a shared folder in Files for bigger files.'); el('fileInput').value = ''; return; }
   const r = new FileReader();
   r.onload = () => {
-    db.ref(roomPath(room)).push({ from: me, ts: Date.now(), file: { name: f.name, size: f.size, data: r.result } });
+    const key = genKey(), payload = { from: me, ts: Date.now(), file: { name: f.name, size: f.size, data: r.result } };
+    addMsg(key, payload);
+    queueSend(room, key, payload);
     el('fileInput').value = '';
   };
   r.readAsDataURL(f);

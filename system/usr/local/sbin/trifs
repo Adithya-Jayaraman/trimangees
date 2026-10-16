@@ -335,6 +335,143 @@ cmd_mount_wait() {
   echo "$out"
 }
 
+# ============================================================
+# Per-account drives (TriOS MAX) — each account (Adithya/Tarun/Arjun)
+# picks its OWN drive, independent of the others and independent of
+# the hidden system TriFS above. Drives are real exFAT partitions
+# (readable directly on Windows/Mac, no container file), tracked by
+# filesystem UUID so it still works if the device path changes.
+# ============================================================
+USERDRIVES="${TRIFS_USERDRIVES:-/etc/trimangees/user-drives.json}"
+mkdir -p "$(dirname "$USERDRIVES")" 2>/dev/null
+[ -s "$USERDRIVES" ] || echo '{}' > "$USERDRIVES" 2>/dev/null
+
+uuid_of() { blkid -o value -s UUID "$1" 2>/dev/null; }
+
+record_user_drive() {   # record_user_drive USER UUID LABEL
+  local tmp; tmp=$(mktemp)
+  jq --arg u "$1" --arg id "$2" --arg lab "$3" '.[$u] = {uuid:$id, label:$lab}' "$USERDRIVES" > "$tmp" 2>/dev/null \
+    && mv "$tmp" "$USERDRIVES" || rm -f "$tmp"
+}
+drive_for_user() { jq -r --arg u "$1" '.[$u].uuid // empty' "$USERDRIVES" 2>/dev/null; }
+
+# Drives a user could pick: blank disks, or any already-formatted
+# partition not already claimed by someone else and not the hidden
+# system TriFS itself.
+cmd_user_scan() {
+  local live assigned out="[]"
+  live=$(live_disk)
+  assigned=$(jq -c '[.[].uuid]' "$USERDRIVES" 2>/dev/null || echo '[]')
+  local dev type size pk mp model ro fst lab uid
+  while IFS='|' read -r dev type size pk mp model ro; do
+    [ -n "$dev" ] || continue
+    usable_leaf "$type" "$mp" "$dev" "$pk" "$live" || continue
+    fst=$(probe "$dev" TYPE)
+    if [ -z "$fst" ]; then
+      case "$type" in disk|loop) ;; *) continue ;; esac
+      [ -z "$mp" ] && [ "$ro" != "true" ] && [ "${size:-0}" -gt 200000000 ] || continue
+      out=$(echo "$out" | jq -c --arg d "$dev" --argjson s "$size" --arg m "$model" '. + [{dev:$d,size:$s,model:$m,blank:true}]')
+      continue
+    fi
+    lab=$(probe "$dev" LABEL); uid=$(uuid_of "$dev")
+    [ "$lab" = "$LABEL" ] && continue    # the hidden system TriFS — never offer it to a user
+    echo "$assigned" | jq -e --arg id "$uid" 'index($id)' >/dev/null 2>&1 && continue   # already someone's
+    case "$fst" in ntfs|exfat|vfat|ext4|ext3) ;; *) continue ;; esac
+    out=$(echo "$out" | jq -c --arg d "$dev" --arg lab "$lab" --arg fst "$fst" --argjson size "${size:-0}" \
+          '. + [{dev:$d,label:$lab,fstype:$fst,size:$size,blank:false}]')
+  done < <(leaf_devices)
+  jq -nc --argjson d "$out" '{ok:true,drives:$d}'
+}
+
+# Give a drive to a user: blank disk -> new exFAT partition labelled
+# TRIFS-<USER>; an already-formatted drive -> used as-is, whatever is
+# on it already.
+cmd_user_assign() {
+  local user="$1" dev="$2" lab part fst id
+  [ -n "$user" ] && [ -n "$dev" ] || fail "usage: trifs user-assign USER DEVICE"
+  [ -b "$dev" ] || fail "$dev is not a drive"
+  lab="TRIFS-$(echo "$user" | tr '[:lower:]' '[:upper:]' | tr -dc 'A-Z0-9' | cut -c1-15)"
+  fst=$(probe "$dev" TYPE)
+  if [ -z "$fst" ]; then
+    log "formatting $dev as exFAT for $user"
+    wipefs -a "$dev" >>"$LOG" 2>&1
+    sgdisk --zap-all "$dev" >>"$LOG" 2>&1
+    sgdisk -n 1:0:0 -t 1:0700 -c 1:"$lab" "$dev" >>"$LOG" 2>&1 || fail "could not partition $dev"
+    partprobe "$dev" >>"$LOG" 2>&1
+    command -v udevadm >/dev/null && udevadm settle --timeout=10 >>"$LOG" 2>&1
+    part=""
+    for _ in $(seq 1 40); do
+      for cand in "${dev}1" "${dev}p1"; do [ -b "$cand" ] && part="$cand" && break; done
+      [ -n "$part" ] && break
+      partx -a "$dev" >>"$LOG" 2>&1; sleep 0.5
+    done
+    [ -n "$part" ] || fail "the new partition did not appear"
+    mkfs.exfat -n "$lab" "$part" >>"$LOG" 2>&1 || fail "could not format $part as exFAT"
+  else
+    part="$dev"
+    lab=$(probe "$part" LABEL); [ -n "$lab" ] || lab="(unlabeled)"
+  fi
+  id=$(uuid_of "$part")
+  [ -n "$id" ] || fail "could not read the new partition's id"
+  record_user_drive "$user" "$id" "$lab"
+  cmd_user_mount "$user" >/dev/null
+  jq -nc --arg u "$user" --arg d "$part" --arg lab "$lab" '{ok:true,user:$u,device:$d,label:$lab}'
+}
+
+# Mount USER's own drive at /trifs/home/<user> and bind it onto /home/<user>.
+cmd_user_mount() {
+  local user="$1" id dev mp fst uid gid
+  [ -n "$user" ] || fail "usage: trifs user-mount USER"
+  id=$(drive_for_user "$user")
+  if [ -z "$id" ]; then jq -nc --arg u "$user" '{ok:true,user:$u,mounted:false,reason:"no drive chosen yet"}'; return 0; fi
+  dev=$(blkid -U "$id" 2>/dev/null)
+  if [ -z "$dev" ]; then jq -nc --arg u "$user" '{ok:true,user:$u,mounted:false,reason:"drive not plugged in"}'; return 0; fi
+  mp="/trifs/home/$user"
+  if is_mounted "$mp"; then jq -nc --arg u "$user" --arg d "$dev" '{ok:true,user:$u,mounted:true,device:$d}'; return 0; fi
+  mkdir -p "$mp"
+  fst=$(probe "$dev" TYPE)
+  uid=$(id -u "$TRI_USER" 2>/dev/null || echo 1000); gid=$(id -g "$TRI_USER" 2>/dev/null || echo 1000)
+  case "$fst" in
+    exfat) mount -t exfat -o rw,noatime,uid=$uid,gid=$gid,umask=0022 "$dev" "$mp" 2>>"$LOG" \
+             || mount -t exfat-fuse -o rw,uid=$uid,gid=$gid "$dev" "$mp" 2>>"$LOG" ;;
+    vfat)  mount -t vfat -o rw,noatime,uid=$uid,gid=$gid,umask=0022 "$dev" "$mp" 2>>"$LOG" ;;
+    ntfs)  mount -t ntfs-3g -o rw,noatime,uid=$uid,gid=$gid,windows_names "$dev" "$mp" 2>>"$LOG" \
+             || mount -t ntfs3 -o rw,noatime,uid=$uid,gid=$gid "$dev" "$mp" 2>>"$LOG" ;;
+    ext4|ext3) mount -o defaults,noatime "$dev" "$mp" 2>>"$LOG" ;;
+    *)     mount "$dev" "$mp" 2>>"$LOG" ;;
+  esac || { rmdir "$mp" 2>/dev/null; fail "could not mount $dev for $user"; }
+  mkdir -p "$mp/Desktop" "$mp/Documents" "$mp/Downloads" "$mp/Pictures" 2>/dev/null
+  chown -R "$uid:$gid" "$mp" 2>/dev/null
+  if [ -d "/home/$user" ] && ! mountpoint -q "/home/$user" 2>/dev/null; then
+    mount --bind "$mp" "/home/$user" 2>>"$LOG" || log "bind of /home/$user onto their own drive failed"
+  fi
+  log "mounted $user's own drive ($dev) at $mp"
+  jq -nc --arg u "$user" --arg d "$dev" '{ok:true,user:$u,mounted:true,device:$d}'
+}
+
+cmd_user_mount_all() {
+  local u out="[]" r
+  for u in $(jq -r 'keys[]' "$USERDRIVES" 2>/dev/null); do
+    r=$(cmd_user_mount "$u")
+    out=$(echo "$out" | jq -c --argjson r "$r" '. + [$r]')
+  done
+  jq -nc --argjson r "$out" '{ok:true,results:$r}'
+}
+
+cmd_user_status() {
+  jq -nc --slurpfile m <(cat "$USERDRIVES" 2>/dev/null || echo '{}') '{ok:true,drives:$m[0]}'
+}
+
+cmd_user_unassign() {
+  local user="$1" tmp
+  [ -n "$user" ] || fail "usage: trifs user-unassign USER"
+  mountpoint -q "/home/$user" 2>/dev/null && { umount "/home/$user" 2>/dev/null || umount -l "/home/$user" 2>/dev/null; }
+  mountpoint -q "/trifs/home/$user" 2>/dev/null && { umount "/trifs/home/$user" 2>/dev/null || umount -l "/trifs/home/$user" 2>/dev/null; }
+  tmp=$(mktemp)
+  jq --arg u "$user" 'del(.[$u])' "$USERDRIVES" > "$tmp" 2>/dev/null && mv "$tmp" "$USERDRIVES" || rm -f "$tmp"
+  jq -nc --arg u "$user" '{ok:true,user:$u,unassigned:true}'
+}
+
 case "${1:-}" in
   status)      status_json ;;
   mount-wait)  cmd_mount_wait ;;
@@ -344,5 +481,11 @@ case "${1:-}" in
   create-img)  [ -n "${2:-}" ] && [ -n "${3:-}" ] || fail "usage: trifs create-img PARTITION GB"; cmd_create_img "$2" "$3" ;;
   persist)     persist_on; status_json ;;
   unmount|umount) cmd_unmount ;;
-  *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount"}'; exit 2 ;;
+  user-scan)       cmd_user_scan ;;
+  user-assign)     [ -n "${2:-}" ] && [ -n "${3:-}" ] || fail "usage: trifs user-assign USER DEVICE"; cmd_user_assign "$2" "$3" ;;
+  user-mount)      [ -n "${2:-}" ] || fail "usage: trifs user-mount USER"; cmd_user_mount "$2" ;;
+  user-mount-all)  cmd_user_mount_all ;;
+  user-status)     cmd_user_status ;;
+  user-unassign)   [ -n "${2:-}" ] || fail "usage: trifs user-unassign USER"; cmd_user_unassign "$2" ;;
+  *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount|user-scan|user-assign USER DEV|user-mount USER|user-mount-all|user-status|user-unassign USER"}'; exit 2 ;;
 esac

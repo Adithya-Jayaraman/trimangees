@@ -806,13 +806,13 @@ body.reduce-motion, body.reduce-motion * { animation: none !important; transitio
 .sys-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,.1); max-width: 420px; margin-top: 8px; overflow: hidden; }
 .sys-bar i { display: block; height: 100%; background: var(--accent); }
 
-/* ── TriFS setup wizard ───────────────────────────────────── */
-#trifs-setup {
+/* ── TriFS setup wizard (and TriOS MAX's per-account drive wizard) ────── */
+#trifs-setup, #userdrive-setup {
   position: fixed; inset: 0; z-index: 2600; display: grid; place-items: center;
   background: radial-gradient(80vw 60vh at 50% 30%, #182050, #07070f 75%);
   overflow-y: auto; padding: 24px;
 }
-#trifs-setup[hidden] { display: none; }
+#trifs-setup[hidden], #userdrive-setup[hidden] { display: none; }
 .tw-card { width: 640px; max-width: 96vw; margin: auto; }
 .tw-title { font-size: 26px; font-weight: 600; letter-spacing: 1px; margin-bottom: 10px; }
 .tw-sub { font-size: 13.5px; color: var(--text-dim); line-height: 1.65; margin-bottom: 18px; }
