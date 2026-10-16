@@ -564,6 +564,48 @@ ipcMain.handle('update:status', () => {
 });
 
 ipcMain.handle('cfg:get', () => loadConfig());
+
+// ── Lite edition: no app loading from storage, built-in AI tools ─────
+const LITE_FLAG = '/etc/trimangees-lite';
+let isLite = false;
+try { isLite = fs.existsSync(LITE_FLAG) || process.env.TRIMANGEES_LITE === '1'; } catch {}
+ipcMain.handle('sys:lite', () => isLite);
+
+// ── AI calls go through the main process (keys never touch a renderer
+// page that could leak them to a webview; also avoids CORS entirely) ──
+const AI_ENDPOINTS = {
+  zai:    { url: 'https://api.z.ai/api/paas/v4/chat/completions', auth: (k) => ({ Authorization: `Bearer ${k}` }) },
+  openai: { url: 'https://api.openai.com/v1/chat/completions',    auth: (k) => ({ Authorization: `Bearer ${k}` }) },
+  groq:   { url: 'https://api.groq.com/openai/v1/chat/completions', auth: (k) => ({ Authorization: `Bearer ${k}` }) },
+  gemini: { url: (m) => `https://generativelanguage.googleapis.com/v1beta/models/${m || 'gemini-2.0-flash'}:generateContent`, auth: () => ({}) },
+};
+ipcMain.handle('ai:call', async (e, { provider, apiKey, model, messages }) => {
+  try {
+    if (!apiKey) return { ok: false, error: 'No API key set for ' + provider + ' (Settings → AI keys).' };
+    const ep = AI_ENDPOINTS[provider];
+    if (!ep) return { ok: false, error: 'Unknown provider ' + provider };
+    let url, body, headers = { 'Content-Type': 'application/json', ...ep.auth(apiKey) };
+    if (provider === 'gemini') {
+      url = ep.url(model) + '?key=' + encodeURIComponent(apiKey);
+      body = JSON.stringify({ contents: messages.map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })) });
+    } else {
+      url = ep.url;
+      body = JSON.stringify({ model: model || (provider === 'groq' ? 'llama-3.3-70b-versatile' : provider === 'zai' ? 'glm-4.6' : 'gpt-4o-mini'), messages });
+    }
+    const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 60000);
+    const res = await fetch(url, { method: 'POST', headers, body, signal: ctrl.signal });
+    clearTimeout(t);
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: (json.error && (json.error.message || JSON.stringify(json.error))) || ('HTTP ' + res.status) };
+    let text = '';
+    if (provider === 'gemini') text = json.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
+    else text = json.choices?.[0]?.message?.content || '';
+    return { ok: true, text: text || '(empty response)' };
+  } catch (err) {
+    return { ok: false, error: err.name === 'AbortError' ? 'Timed out' : err.message };
+  }
+});
+
 ipcMain.handle('cfg:set', (e, cfg) => { saveConfig(cfg); return true; });
 
 ipcMain.handle('app:file', (e, { rel } = {}) => {

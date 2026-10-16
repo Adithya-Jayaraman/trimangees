@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TriAI Dev</title>
+<style>
+  :root{
+    --bg:#0e0b18; --surface:#181424; --surface2:#221c33; --border:#352c4a;
+    --text:#ece8fa; --dim:#9c93ba; --dimmer:#6a6186;
+    --accent:#c85ae0; --ok:#5ee6c7; --danger:#ff6b7a; --warn:#f0c674;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    height:100vh;overflow:hidden;font-size:14px;display:flex;flex-direction:column}
+  button,textarea,select{font-family:inherit;font-size:13px}
+  #top{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+  .brand{font-size:17px;font-weight:600}.brand span{color:var(--accent)}
+  #taskRow{display:flex;gap:10px;align-items:flex-end}
+  #taskInput{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;
+    color:var(--text);padding:11px 14px;min-height:46px;max-height:140px;resize:vertical;font-family:inherit}
+  #taskInput:focus{outline:none;border-color:var(--accent)}
+  #runBtn{background:var(--accent);color:#1a0e22;border:none;font-weight:700;padding:11px 20px;
+    border-radius:10px;cursor:pointer;white-space:nowrap}
+  #runBtn:disabled{opacity:.5;cursor:default}
+  #provRow{display:flex;gap:16px;font-size:12px;color:var(--dim)}
+  #provRow label{display:flex;align-items:center;gap:6px;cursor:pointer}
+  #noKeys{font-size:12px;color:var(--warn);display:none}
+  #noKeys.on{display:block}
+  #noKeys a{color:var(--accent);cursor:pointer;text-decoration:underline}
+
+  #body{flex:1;overflow-y:auto;padding:18px 20px}
+  #panels{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-bottom:18px}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;min-height:140px;display:flex;flex-direction:column}
+  .panel .ph{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-weight:600;font-size:12.5px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--dimmer);flex:none}
+  .dot.busy{background:var(--warn);animation:pulse 1s infinite}
+  .dot.ok{background:var(--ok)}
+  .dot.err{background:var(--danger)}
+  @keyframes pulse{50%{opacity:.3}}
+  .ptext{white-space:pre-wrap;font-size:12.5px;line-height:1.55;color:var(--dim);flex:1;overflow-y:auto;max-height:260px}
+  .ptext.err{color:var(--danger)}
+  .ptext.ok{color:var(--text)}
+
+  #finalWrap{display:none;background:var(--surface);border:1px solid var(--accent);border-radius:14px;padding:18px}
+  #finalWrap.on{display:block}
+  #finalWrap h3{margin:0 0 10px;color:var(--accent);font-size:13px;text-transform:uppercase;letter-spacing:.05em}
+  #finalText{white-space:pre-wrap;line-height:1.6;font-size:14px}
+  #finalActions{margin-top:14px}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12px}
+  .btn:hover{border-color:var(--accent)}
+  #hint{color:var(--dimmer);font-size:12px;padding:40px;text-align:center}
+  ::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:5px}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="brand">Tri<span>AI</span> Dev</div>
+  <div id="taskRow">
+    <textarea id="taskInput" placeholder="Describe the coding task — every AI you've enabled below works on it, then z.ai and ChatGPT merge the results into one answer."></textarea>
+    <button id="runBtn">Run</button>
+  </div>
+  <div id="provRow">
+    <label><input type="checkbox" data-p="zai" checked> z.ai (GLM)</label>
+    <label><input type="checkbox" data-p="openai" checked> ChatGPT</label>
+    <label><input type="checkbox" data-p="gemini" checked> Gemini</label>
+    <label><input type="checkbox" data-p="groq" checked> Groq</label>
+  </div>
+  <div id="noKeys">No API keys are set yet. <a id="goSettings">Open Settings → AI keys</a> to add them.</div>
+</div>
+
+<div id="body">
+  <div id="hint">Type a task above and press Run. Each AI you've enabled answers independently; z.ai and ChatGPT then combine all the answers into one final, best answer.</div>
+  <div id="panels" style="display:none"></div>
+  <div id="finalWrap">
+    <h3>Combined answer</h3>
+    <div id="finalText"></div>
+    <div id="finalActions"><button class="btn" id="copyBtn">Copy</button></div>
+  </div>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PROVIDERS = [
+  ['zai', 'z.ai (GLM)'], ['openai', 'ChatGPT'], ['gemini', 'Gemini'], ['groq', 'Groq'],
+];
+const K = window.kernel || (window.parent && window.parent.kernel) || null;
+const hasKernel = !!(K && K.aiCall);
+
+async function getKeys(){
+  if (!hasKernel) return {};
+  try { const cfg = await K.getConfig(); return (cfg && cfg.aiKeys) || {}; } catch { return {}; }
+}
+
+async function checkKeys(){
+  const keys = await getKeys();
+  const any = PROVIDERS.some(([id]) => keys[id]);
+  el('noKeys').classList.toggle('on', !any);
+  return keys;
+}
+checkKeys();
+el('goSettings').onclick = () => {
+  try { if (window.parent && window.parent.launch) window.parent.launch('settings'); } catch {}
+};
+
+function enabledProviders(){
+  return [...document.querySelectorAll('#provRow input[type=checkbox]:checked')].map(c => c.dataset.p);
+}
+
+async function ask(provider, task, keys){
+  if (!hasKernel) return { ok: false, error: 'AI calls need to run inside TrimangeesOS.' };
+  const key = keys[provider];
+  if (!key) return { ok: false, error: 'No API key set for this provider.' };
+  return K.aiCall(provider, key, null, [
+    { role: 'system', content: 'You are a skilled, concise coding assistant. Give working code and explain briefly.' },
+    { role: 'user', content: task },
+  ]);
+}
+
+el('runBtn').onclick = async () => {
+  const task = el('taskInput').value.trim();
+  if (!task) return;
+  const keys = await checkKeys();
+  const chosen = enabledProviders();
+  if (!chosen.length) return alert('Pick at least one AI above.');
+
+  el('hint').style.display = 'none';
+  el('finalWrap').classList.remove('on');
+  el('runBtn').disabled = true;
+  const panels = el('panels'); panels.style.display = 'grid'; panels.innerHTML = '';
+  const results = {};
+
+  for (const id of chosen) {
+    const name = PROVIDERS.find(p => p[0] === id)[1];
+    const p = document.createElement('div'); p.className = 'panel'; p.id = 'panel-' + id;
+    p.innerHTML = `<div class="ph"><span class="dot busy"></span>${esc(name)}</div><div class="ptext">Thinking…</div>`;
+    panels.appendChild(p);
+  }
+
+  await Promise.all(chosen.map(async (id) => {
+    const r = await ask(id, task, keys);
+    results[id] = r;
+    const p = document.getElementById('panel-' + id);
+    const dot = p.querySelector('.dot'), txt = p.querySelector('.ptext');
+    if (r.ok) { dot.className = 'dot ok'; txt.className = 'ptext ok'; txt.textContent = r.text; }
+    else { dot.className = 'dot err'; txt.className = 'ptext err'; txt.textContent = r.error || 'Failed.'; }
+  }));
+
+  el('runBtn').disabled = false;
+
+  const okOnes = chosen.filter(id => results[id] && results[id].ok);
+  if (okOnes.length < 1) return;   // nothing to merge
+  if (okOnes.length === 1) {
+    el('finalText').textContent = results[okOnes[0]].text;
+    el('finalWrap').classList.add('on');
+    return;
+  }
+
+  // Merge: z.ai combines, then ChatGPT double-checks/cleans up the combined
+  // answer. If one of those two isn't enabled/available, fall back to the
+  // other, or to whichever AI answered.
+  const digest = okOnes.map(id => `--- ${PROVIDERS.find(p => p[0] === id)[1]} ---\n${results[id].text}`).join('\n\n');
+  const mergePrompt = `Here are several AI answers to the same coding task: "${task}"\n\n${digest}\n\nCombine these into ONE best answer: take the strongest parts of each, resolve any disagreements by picking the most correct/working approach, and give clean, complete final code with a short explanation. Don't mention that this came from multiple AIs.`;
+
+  const mergerOrder = ['zai', 'openai'].filter(id => keys[id]);
+  let merged = null;
+  for (const id of mergerOrder) {
+    const r = await ask(id, mergePrompt, keys);
+    if (r.ok) { merged = r.text; break; }
+  }
+  if (!merged && okOnes.length) merged = results[okOnes[0]].text;   // last resort: best single answer
+
+  if (merged) {
+    el('finalText').textContent = merged;
+    el('finalWrap').classList.add('on');
+  }
+};
+
+el('copyBtn').onclick = () => {
+  navigator.clipboard.writeText(el('finalText').textContent).catch(() => {});
+  el('copyBtn').textContent = 'Copied!';
+  setTimeout(() => el('copyBtn').textContent = 'Copy', 1200);
+};
+</script>
+</body>
+</html>

@@ -8,7 +8,10 @@ WORK="${WORK:-/var/tmp/trios-build}"
 OUT="${OUT:-$HERE/out}"
 MIRROR="${MIRROR:-http://archive.ubuntu.com/ubuntu}"
 ELECTRON_VERSION="${ELECTRON_VERSION:-33.4.11}"
-VOLID="TRIMANGEESOS"
+VOLID="${VOLID:-TRIMANGEESOS}"
+ISONAME="${ISONAME:-TrimangeesOS}"
+EXTRA_APT="${EXTRA_APT:-}"
+LITE_FLAG="${LITE_FLAG:-0}"
 ROOT="$WORK/rootfs"
 [ "$(id -u)" = 0 ] || { echo "run as root (sudo)"; exit 1; }
 
@@ -33,7 +36,7 @@ cp /etc/resolv.conf "$ROOT/etc/resolv.conf" 2>/dev/null || true
 cp "$HERE/build/chroot-setup.sh" "$ROOT/root/chroot-setup.sh"
 if [ ! -f "$ROOT/.setup-done" ]; then
   echo "### chroot setup (this is the long part)"
-  chroot "$ROOT" env MIRROR="$MIRROR" bash /root/chroot-setup.sh
+  chroot "$ROOT" env MIRROR="$MIRROR" EXTRA_APT="$EXTRA_APT" LITE_FLAG="$LITE_FLAG" bash /root/chroot-setup.sh
   touch "$ROOT/.setup-done"
 fi
 
@@ -78,9 +81,9 @@ mksquashfs "$ROOT" "$ISO/live/filesystem.squashfs" $COMP -noappend -no-progress 
   -e boot/vmlinuz* boot/initrd.img* .bootstrapped .setup-done
 
 echo "### grub-mkrescue"
-ISOFILE="$OUT/TrimangeesOS.iso"
+ISOFILE="$OUT/$ISONAME.iso"
 grub-mkrescue -o "$ISOFILE" "$ISO" -volid "$VOLID" 2>&1 | tail -5
-( cd "$OUT" && sha256sum TrimangeesOS.iso > TrimangeesOS.iso.sha256 )
+( cd "$OUT" && sha256sum "$ISONAME.iso" > "$ISONAME.iso.sha256" )
 SIZE=$(stat -c %s "$ISOFILE")
 echo "ISO size: $((SIZE/1024/1024)) MB"
 if [ "$SIZE" -gt 1900000000 ]; then

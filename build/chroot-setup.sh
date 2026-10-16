@@ -116,6 +116,14 @@ chown trimangees:trimangees /home/Adithya /home/Tarun /home/Arjun /var/log/trima
 chown trimangees:trimangees /trifs /trifs/home /trifs/Applications /trifs/shared /trifs/system
 chmod 0440 /etc/sudoers.d/trimangees 2>/dev/null || true
 
+say "extra packages for this build (EXTRA_APT)"
+if [ -n "${EXTRA_APT:-}" ]; then
+  $APT install $EXTRA_APT || echo "WARNING: some extra packages did not install: $EXTRA_APT"
+fi
+if [ "${LITE_FLAG:-0}" = 1 ]; then
+  echo 1 > /etc/trimangees-lite
+fi
+
 say "locale, time zone, hostname"
 sed -i 's/^# *\(en_US.UTF-8\)/\1/; s/^# *\(en_IN\)/\1/' /etc/locale.gen
 grep -q '^en_US.UTF-8' /etc/locale.gen || echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen

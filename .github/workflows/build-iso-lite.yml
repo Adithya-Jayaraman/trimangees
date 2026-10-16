@@ -1,0 +1,69 @@
+name: Build TrimangeesOS Lite ISO
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['shell/**', 'system/**', 'build/**', '.github/workflows/**']
+
+permissions:
+  contents: write
+
+# a newer push cancels any older Lite build that is still running
+# (this is a separate group from the regular build, so the two never cancel each other)
+concurrency:
+  group: build-iso-lite
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin grub-common mtools rsync
+
+      - name: Build Lite ISO
+        run: sudo BUILD_ID="lite-$(date +%Y%m%d-%H%M)-${GITHUB_SHA::7}" OUT=$PWD/out ./build/build-iso-lite.sh
+
+      - name: Make the desktop-only update file (shell-update.zip)
+        run: |
+          mkdir -p out
+          ( cd shell && zip -qr ../out/shell-update.zip . -x 'node_modules/*' 'test*' )
+          ls -la out/shell-update.zip
+
+      - name: Boot test in QEMU (best effort)
+        continue-on-error: true
+        run: |
+          sudo apt-get install -y qemu-system-x86 ovmf
+          ISO=out/TrimangeesOS-Lite.iso
+          if [ ! -f "$ISO" ]; then cat out/TrimangeesOS-Lite.iso.part* > /tmp/joined.iso; ISO=/tmp/joined.iso; fi
+          qemu-img create -f qcow2 /tmp/trifs.qcow2 4G
+          timeout 900 qemu-system-x86_64 -m 3072 -smp 2 -cdrom "$ISO" -hda /tmp/trifs.qcow2 -boot d \
+            -display none -serial file:out/serial.log -monitor none \
+            || true
+          grep -a "TRIMANGEES_SHELL_READY" out/serial.log && echo BOOT_OK || echo "no ready marker (TCG is slow; check serial.log)"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="lite-build-$(date +%Y%m%d-%H%M)"
+          gh release create "$TAG" --title "TrimangeesOS Lite $TAG" --notes "Download the ISO file(s) below. Lite loads nothing from TriFS/storage at startup — only what's built into the image." \
+            out/TrimangeesOS-Lite.iso* out/shell-update.zip out/serial.log 2>/dev/null || \
+          gh release create "$TAG" --title "TrimangeesOS Lite $TAG" --notes "Download the ISO file(s) below." out/TrimangeesOS-Lite.iso* out/shell-update.zip
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lite-logs
+          path: out/*.log
+          if-no-files-found: ignore

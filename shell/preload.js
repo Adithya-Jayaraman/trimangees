@@ -108,5 +108,7 @@ contextBridge.exposeInMainWorld('kernel', {
   sysInfo:  ()     => ipcRenderer.invoke('sys:info'),
   power:    (action) => ipcRenderer.invoke('power', { action }),
   setFullscreen: (on) => ipcRenderer.invoke('win:fullscreen', { on }),
+  isLite: () => ipcRenderer.invoke('sys:lite'),
+  aiCall: (provider, apiKey, model, messages) => ipcRenderer.invoke('ai:call', { provider, apiKey, model, messages }),
   isFullscreen:  ()   => ipcRenderer.invoke('win:isFullscreen'),
 });

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TriWEATHER Advanced</title>
+<style>
+  :root{
+    --bg:#0a0e18; --surface:#131a28; --surface2:#1b2335; --border:#273149;
+    --text:#e9ecf5; --dim:#8893ad; --dimmer:#5a637d;
+    --accent:#3c96ff; --warn:#ff8f3c; --danger:#ff5a6e; --ok:#5ee6c7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    height:100vh;overflow-y:auto;font-size:14px}
+  button,input,select{font-family:inherit;font-size:13px}
+  #top{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:5}
+  .brand{font-size:17px;font-weight:600}.brand span{color:var(--accent)}
+  #locInput{flex:1;max-width:340px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;
+    padding:8px 12px;color:var(--text)}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:9px;cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  #wrap{max-width:900px;margin:0 auto;padding:22px}
+  #alertBar{display:none;background:rgba(255,95,110,.12);border:1px solid var(--danger);color:#ffb3bd;
+    border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13px}
+  #alertBar.on{display:block}
+  #now{display:flex;align-items:center;gap:22px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px;margin-bottom:18px}
+  #nowIcon{font-size:56px}
+  #nowTemp{font-size:46px;font-weight:300}
+  #nowDesc{color:var(--dim);font-size:14px;margin-top:4px}
+  #nowPlace{font-size:12px;color:var(--dimmer);margin-top:2px}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
+  .tile .l{color:var(--dimmer);font-size:11px;text-transform:uppercase;margin-bottom:4px}
+  .tile .v{font-size:19px;font-weight:600}
+  h3{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin:22px 0 10px}
+  #hourly{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px}
+  .hr{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;min-width:76px;text-align:center;flex:none}
+  .hr .t{font-size:11px;color:var(--dimmer)}
+  .hr .i{font-size:20px;margin:4px 0}
+  .hr .v{font-size:13px}
+  .hr .p{font-size:10px;color:var(--accent)}
+  #cloudNote{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px}
+  #cloudNote textarea{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);padding:10px;min-height:70px;resize:vertical;font-family:inherit}
+  #cloudLog{margin-top:12px;font-size:12px;color:var(--dim)}
+  .logRow{padding:7px 0;border-top:1px solid var(--border)}
+  #loading{text-align:center;color:var(--dimmer);padding:40px}
+  ::-webkit-scrollbar{height:9px;width:9px}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:5px}
+</style>
+</head>
+<body>
+
+<div id="top">
+  <div class="brand">Tri<span>WEATHER</span> Advanced</div>
+  <input id="locInput" value="Whitefield, Bengaluru">
+  <button class="btn" id="goBtn">Go</button>
+  <button class="btn" id="hereBtn">Use my location</button>
+</div>
+
+<div id="wrap">
+  <div id="loading">Loading weather…</div>
+  <div id="content" style="display:none">
+    <div id="alertBar"></div>
+    <div id="now">
+      <div id="nowIcon">&#9729;&#65039;</div>
+      <div>
+        <div id="nowTemp">--&deg;</div>
+        <div id="nowDesc"></div>
+        <div id="nowPlace"></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="tile"><div class="l">Feels like</div><div class="v" id="tFeels">--</div></div>
+      <div class="tile"><div class="l">Humidity</div><div class="v" id="tHum">--</div></div>
+      <div class="tile"><div class="l">Wind</div><div class="v" id="tWind">--</div></div>
+      <div class="tile"><div class="l">Pressure</div><div class="v" id="tPress">--</div></div>
+    </div>
+    <h3>Storm-spotting</h3>
+    <div class="grid">
+      <div class="tile"><div class="l">CAPE (instability)</div><div class="v" id="tCape">--</div></div>
+      <div class="tile"><div class="l">Precip. chance</div><div class="v" id="tPrecip">--</div></div>
+      <div class="tile"><div class="l">Cloud cover</div><div class="v" id="tCloud">--</div></div>
+      <div class="tile"><div class="l">Freezing level</div><div class="v" id="tFreeze">--</div></div>
+    </div>
+    <h3>Next 12 hours</h3>
+    <div id="hourly"></div>
+    <h3>Cloud log</h3>
+    <div id="cloudNote">
+      <textarea id="cloudInput" placeholder="What are you seeing? e.g. towering cumulus to the NW, base lowering, anvil forming…"></textarea>
+      <button class="btn" id="logBtn" style="margin-top:8px">Log observation</button>
+      <div id="cloudLog"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let lat = 12.9698, lon = 77.7500, place = 'Whitefield, Bengaluru';
+
+const WCODE = {
+  0:['Clear sky','☀️'], 1:['Mainly clear','\u{1F324}️'], 2:['Partly cloudy','⛅'], 3:['Overcast','☁️'],
+  45:['Fog','\u{1F32B}️'], 48:['Rime fog','\u{1F32B}️'],
+  51:['Light drizzle','\u{1F326}️'], 53:['Drizzle','\u{1F326}️'], 55:['Heavy drizzle','\u{1F327}️'],
+  61:['Light rain','\u{1F327}️'], 63:['Rain','\u{1F327}️'], 65:['Heavy rain','⛈️'],
+  71:['Light snow','\u{1F328}️'], 73:['Snow','❄️'], 75:['Heavy snow','❄️'],
+  80:['Rain showers','\u{1F326}️'], 81:['Rain showers','\u{1F327}️'], 82:['Violent showers','⛈️'],
+  95:['Thunderstorm','⛈️'], 96:['Thunderstorm, hail','⛈️'], 99:['Severe thunderstorm, hail','⛈️'],
+};
+const wInfo = c => WCODE[c] || ['Unknown', '☁️'];
+
+async function geocode(q){
+  const r = await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(q) + '&count=1');
+  const j = await r.json();
+  if (j.results && j.results[0]) {
+    const g = j.results[0];
+    return { lat: g.latitude, lon: g.longitude, place: [g.name, g.admin1, g.country].filter(Boolean).join(', ') };
+  }
+  return null;
+}
+
+async function load(){
+  el('loading').style.display = 'block'; el('content').style.display = 'none';
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+    `&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,surface_pressure,cloud_cover` +
+    `&hourly=temperature_2m,weather_code,precipitation_probability,cape,freezing_level_height` +
+    `&timezone=auto&forecast_days=2`;
+  let data;
+  try { data = await (await fetch(url)).json(); }
+  catch (e) { el('loading').textContent = "Couldn't reach the weather service — check the internet connection."; return; }
+  if (!data || !data.current) { el('loading').textContent = "No weather data for that place."; return; }
+  render(data);
+}
+
+function render(d){
+  el('loading').style.display = 'none'; el('content').style.display = 'block';
+  const c = d.current;
+  const [desc, icon] = wInfo(c.weather_code);
+  el('nowIcon').textContent = icon;
+  el('nowTemp').innerHTML = Math.round(c.temperature_2m) + '&deg;C';
+  el('nowDesc').textContent = desc;
+  el('nowPlace').textContent = place;
+  el('tFeels').textContent = Math.round(c.apparent_temperature) + '°C';
+  el('tHum').textContent = c.relative_humidity_2m + '%';
+  el('tWind').textContent = Math.round(c.wind_speed_10m) + ' km/h';
+  el('tPress').textContent = Math.round(c.surface_pressure) + ' hPa';
+
+  const H = d.hourly;
+  const now = new Date();
+  let idx = H.time.findIndex(t => new Date(t) >= now); if (idx < 0) idx = 0;
+  const cape = H.cape[idx] ?? 0, precip = H.precipitation_probability[idx] ?? 0, cloud = c.cloud_cover ?? 0, freeze = H.freezing_level_height[idx] ?? 0;
+  el('tCape').textContent = Math.round(cape) + ' J/kg';
+  el('tPrecip').textContent = precip + '%';
+  el('tCloud').textContent = cloud + '%';
+  el('tFreeze').textContent = Math.round(freeze) + ' m';
+
+  // simple storm-spotting threshold alert (CAPE + precip chance), for convective development timing
+  const bar = el('alertBar');
+  if (cape > 1500 && precip > 40) {
+    bar.className = 'alertBar on'; bar.classList.add('on');
+    bar.textContent = `⚠️ High instability (CAPE ${Math.round(cape)} J/kg) with a ${precip}% rain chance — good storm-spotting conditions, watch for towering cumulus developing.`;
+  } else if (cape > 800) {
+    bar.classList.add('on');
+    bar.textContent = `Some instability building (CAPE ${Math.round(cape)} J/kg) — worth keeping an eye on the sky.`;
+  } else bar.classList.remove('on');
+
+  const hw = el('hourly'); hw.innerHTML = '';
+  for (let i = idx; i < Math.min(idx + 12, H.time.length); i++) {
+    const [, ic] = wInfo(H.weather_code[i]);
+    const t = new Date(H.time[i]);
+    hw.insertAdjacentHTML('beforeend', `<div class="hr"><div class="t">${t.getHours()}:00</div><div class="i">${ic}</div>
+      <div class="v">${Math.round(H.temperature_2m[i])}°</div><div class="p">${H.precipitation_probability[i]}%</div></div>`);
+  }
+}
+
+el('goBtn').onclick = async () => {
+  const g = await geocode(el('locInput').value.trim());
+  if (!g) return alert("Couldn't find that place.");
+  lat = g.lat; lon = g.lon; place = g.place; load();
+};
+el('locInput').addEventListener('keydown', e => { if (e.key === 'Enter') el('goBtn').click(); });
+el('hereBtn').onclick = () => {
+  if (!navigator.geolocation) return alert('Location is not available here.');
+  navigator.geolocation.getCurrentPosition(p => { lat = p.coords.latitude; lon = p.coords.longitude; place = 'My location'; el('locInput').value = place; load(); },
+    () => alert('Could not get your location.'));
+};
+
+// Cloud observation log — kept locally on this machine (TriFS), per session.
+const LOG_KEY = 'triweather-cloudlog';
+function loadLog(){ try { return JSON.parse(localStorage.getItem(LOG_KEY) || '[]'); } catch { return []; } }
+function renderLog(){
+  const log = loadLog();
+  el('cloudLog').innerHTML = log.length ? log.slice().reverse().map(e =>
+    `<div class="logRow"><b>${new Date(e.ts).toLocaleString([], {hour:'2-digit', minute:'2-digit', day:'numeric', month:'short'})}</b> — ${esc(e.text)}</div>`).join('') :
+    '<div style="color:var(--dimmer)">No observations logged yet.</div>';
+}
+el('logBtn').onclick = () => {
+  const t = el('cloudInput').value.trim(); if (!t) return;
+  const log = loadLog(); log.push({ ts: Date.now(), text: t });
+  localStorage.setItem(LOG_KEY, JSON.stringify(log.slice(-100)));
+  el('cloudInput').value = ''; renderLog();
+};
+renderLog();
+load();
+</script>
+</body>
+</html>

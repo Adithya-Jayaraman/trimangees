@@ -42,11 +42,16 @@ const BUILT_IN_APPS = [
   { id: "w-progs",  name: "Windows Programs", color: "#3a9d8f", letter: "U",    builtin: true, exec: { type: "winetool", args: ["uninstaller"] },         needs: "wine", category: "Windows" },
   { id: "w-config", name: "Wine Settings",  color: "#8287aa", letter: "\u2699", builtin: true, exec: { type: "winetool", args: ["winecfg"] },              needs: "wine", category: "Windows" },
   { id: "player",   name: "Media Player", color: "#ff8a3c", letter: "\u25B6", builtin: true, category: "System" },
-  { id: "store",    name: "App Store",    color: "#2db37a", letter: "\u2B07", builtin: true, category: "System" },
+  { id: "store",    name: "App Store",    color: "#2db37a", letter: "\u2B07", builtin: true, category: "System", hideLite: true },
+  { id: "chattrimangees", name: "ChatTrimangees", color: "#5ee6c7", letter: "\u{1F4AC}", builtin: true, local: true, url: "apps/chattrimangees.html", category: "Trimangees Advanced", liteOnly: true },
+  { id: "trimail",  name: "TriMAIL",  color: "#f0c020", letter: "\u2709\uFE0F", builtin: true, local: true, url: "apps/trimail.html", category: "Trimangees Advanced", liteOnly: true },
+  { id: "triweather", name: "TriWEATHER", color: "#3c96ff", letter: "\u{1F329}\uFE0F", builtin: true, local: true, url: "apps/triweather.html", category: "Trimangees Advanced", liteOnly: true },
+  { id: "triaidev", name: "TriAI Dev", color: "#c85ae0", letter: "\u{1F916}", builtin: true, local: true, url: "apps/triaidev.html", category: "Trimangees Advanced", liteOnly: true },
   { id: "viewer",    name: "Image Viewer", color: "#4aa8c8", letter: "V", builtin: true, hidden: true },
   { id: "htmlview",  name: "HTML Viewer",  color: "#e07830", letter: "H", builtin: true, hidden: true },
   { id: "editor",    name: "Text Editor",  color: "#c8a04a", letter: "E", builtin: true, hidden: true },
 ];
+let IS_LITE = false;   // set at boot from the ISO's /etc/trimangees-lite marker
 let APPS = BUILT_IN_APPS.map(a => ({ ...a }));       // grows when cloud apps load
 const DEFAULT_PINNED = ["explorer", "browser", "chrome", "terminal", "tridocs", "trisheets", "trislides", "mayfly"];
 let PINNED = [...DEFAULT_PINNED];
@@ -85,7 +90,7 @@ let CLOUD_APPS = [], LOCAL_APPS = [], LOCAL_SIG = "";
 let HAS = { wine: false, chrome: false };
 
 function mergeApps() {
-  const map = new Map(BUILT_IN_APPS.filter(a => !a.needs || HAS[a.needs]).map(a => [a.id, { ...a }]));
+  const map = new Map(BUILT_IN_APPS.filter(a => (!a.needs || HAS[a.needs]) && (!a.liteOnly || IS_LITE) && (!a.hideLite || !IS_LITE)).map(a => [a.id, { ...a }]));
   for (const ca of CLOUD_APPS) {
     const base = map.get(ca.id);
     // Merge onto a built-in (keeps its builtin/local nature) or add fresh.
@@ -102,6 +107,7 @@ function mergeApps() {
 
 // Programs the user dropped in /Applications, and programs Wine installed.
 async function refreshLocalApps() {
+  if (IS_LITE) return;   // Lite never loads apps the user dropped into storage
   try {
     const [loc, wine] = await Promise.all([kernel.appsLocal(), kernel.appsWine()]);
     const mapped = [];
@@ -124,8 +130,10 @@ async function refreshLocalApps() {
 
 async function loadApps() {
   let cloud = [];
-  try { cloud = await Cloud.loadAppManifest(); }
-  catch (e) { console.warn("loadApps:", e); }
+  if (!IS_LITE) {
+    try { cloud = await Cloud.loadAppManifest(); }
+    catch (e) { console.warn("loadApps:", e); }
+  }
   CLOUD_APPS = cloud;
   try { HAS = await kernel.appsHas(); } catch {}
   cloudAppsLoaded = true;
@@ -2310,6 +2318,8 @@ async function maybeTriFSWizard() {
 // Boot
 // ============================================================
 (async function boot() {
+  try { IS_LITE = await kernel.isLite(); } catch {}
+  document.body.classList.toggle("lite", IS_LITE);
   CFG = migrateConfig(await kernel.getConfig());
   applyPrefs();
   osApplyThemeGuest();
@@ -2325,5 +2335,5 @@ async function maybeTriFSWizard() {
   setTimeout(() => $("#splash").classList.add("fade"), 1300);
   setTimeout(() => $("#splash").remove(), 2000);
   setTimeout(() => EX.maybeFirstRun(), 1800);
-  setInterval(() => { if (CURRENT_USER) refreshLocalApps(); }, 20000);   // programs installed in the meantime
+  if (!IS_LITE) setInterval(() => { if (CURRENT_USER) refreshLocalApps(); }, 20000);   // programs installed in the meantime
 })();

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TriMAIL Advanced</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg:#0e1015; --surface:#161922; --surface2:#1e222d; --border:#272b38;
+    --text:#e9ebf1; --dim:#868ca0; --dimmer:#565c6f;
+    --accent:#f0c020; --accent-soft:rgba(240,192,32,.14); --danger:#ff6b7a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);
+    height:100vh;overflow:hidden;font-size:14px}
+  button,input,textarea{font-family:inherit;font-size:13px}
+  #loginScreen{height:100vh;display:flex;align-items:center;justify-content:center}
+  #loginBox{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px 44px;text-align:center}
+  .brand{font-size:19px;font-weight:600}.brand span{color:var(--accent)}
+  #loginBox .sub{color:var(--dimmer);font-size:13px;margin:6px 0 22px}
+  .accountRow{display:flex;gap:12px}
+  .accountBtn{background:var(--surface2);border:1px solid var(--border);color:var(--text);
+    padding:14px 22px;border-radius:10px;cursor:pointer;font-size:14px;min-width:90px}
+  .accountBtn:hover{border-color:var(--accent);color:var(--accent)}
+
+  #app{display:none;height:100vh;grid-template-columns:200px 300px 1fr;grid-template-rows:100vh}
+  #app.on{display:grid}
+  #sidebar{background:var(--surface);border-right:1px solid var(--border);padding:14px 0;display:flex;flex-direction:column}
+  #sidebar .me{padding:0 16px 14px;border-bottom:1px solid var(--border);margin-bottom:8px;font-weight:600}
+  #composeBtn{margin:0 16px 14px;background:var(--accent);color:#1a1300;border:none;font-weight:700;
+    padding:10px;border-radius:10px;cursor:pointer}
+  .folder{padding:9px 16px;cursor:pointer;display:flex;justify-content:space-between}
+  .folder:hover{background:var(--surface2)}
+  .folder.active{background:var(--accent-soft);color:var(--accent)}
+  #switchAcct{margin:auto 16px 0;background:none;border:1px solid var(--border);color:var(--dim);padding:7px 10px;border-radius:8px;cursor:pointer}
+
+  #list{border-right:1px solid var(--border);overflow-y:auto}
+  .mailRow{padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer}
+  .mailRow:hover{background:var(--surface2)}
+  .mailRow.active{background:var(--accent-soft)}
+  .mailRow.unread .mSubj{font-weight:700}
+  .mFrom{font-size:12px;color:var(--accent);margin-bottom:2px}
+  .mSubj{font-size:13px;margin-bottom:3px}
+  .mPrev{font-size:11px;color:var(--dimmer);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mTime{font-size:10px;color:var(--dimmer);float:right}
+  #emptyList{padding:30px;text-align:center;color:var(--dimmer)}
+
+  #reader{padding:24px;overflow-y:auto}
+  #readerEmpty{color:var(--dimmer);margin:auto;text-align:center;height:100%;display:flex;align-items:center;justify-content:center}
+  #rSubj{font-size:19px;margin-bottom:10px}
+  #rMeta{color:var(--dimmer);font-size:12px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  #rBody{white-space:pre-wrap;line-height:1.6}
+  .attRow{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;padding:8px 10px;margin-top:10px;cursor:pointer;width:fit-content}
+  .attRow:hover{border-color:var(--accent)}
+  #rActions{margin-top:20px}
+  .btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 15px;border-radius:8px;cursor:pointer}
+  .btn:hover{border-color:var(--accent)}
+  .btn.danger:hover{border-color:var(--danger);color:var(--danger)}
+
+  #composeOv{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:10}
+  #composeOv.on{display:flex}
+  #composeBox{background:var(--surface);border:1px solid var(--border);border-radius:14px;width:560px;max-width:92vw;padding:22px}
+  #composeBox h3{margin:0 0 14px}
+  #composeBox select,#composeBox input,#composeBox textarea{
+    width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);
+    padding:9px 11px;margin-bottom:10px}
+  #composeBox textarea{min-height:140px;resize:vertical;font-family:inherit}
+  #composeFoot{display:flex;justify-content:space-between;align-items:center}
+  ::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:5px}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div id="loginBox">
+    <div class="brand">Tri<span>MAIL</span> Advanced</div>
+    <div class="sub">Family mail — not real email, just between you three.</div>
+    <div class="accountRow">
+      <button class="accountBtn" data-account="Adithya">Adithya</button>
+      <button class="accountBtn" data-account="Tarun">Tarun</button>
+      <button class="accountBtn" data-account="Arjun">Arjun</button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="sidebar">
+    <div class="me" id="meLabel"></div>
+    <button id="composeBtn">&#9998; Compose</button>
+    <div class="folder active" data-folder="inbox"><span>&#128229; Inbox</span><span id="unreadCount"></span></div>
+    <div class="folder" data-folder="sent"><span>&#128228; Sent</span></div>
+    <button id="switchAcct">Switch account</button>
+  </div>
+  <div id="list"></div>
+  <div id="reader"><div id="readerEmpty">Select a message</div></div>
+</div>
+
+<div id="composeOv">
+  <div id="composeBox">
+    <h3>New message</h3>
+    <select id="cTo"></select>
+    <input id="cSubj" placeholder="Subject">
+    <textarea id="cBody" placeholder="Write your message…"></textarea>
+    <input type="file" id="cFile">
+    <div id="composeFoot">
+      <button class="btn" id="cCancel">Cancel</button>
+      <button class="btn" id="cSend" style="background:var(--accent);color:#1a1300;border:none;font-weight:700">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const FIREBASE_HOST = 'trimangeesos-default-rtdb.firebaseio.com';
+firebase.initializeApp({ databaseURL: 'https://' + FIREBASE_HOST });
+const db = firebase.database();
+const el = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const PEOPLE = ['Adithya','Tarun','Arjun'];
+const MAX_FILE = 700_000;
+
+let me = null, folder = 'inbox', selectedKey = null, mails = {};
+
+document.querySelectorAll('.accountBtn').forEach(btn => {
+  btn.onclick = () => {
+    me = btn.dataset.account;
+    el('loginScreen').style.display = 'none';
+    el('app').classList.add('on');
+    el('meLabel').textContent = me;
+    el('cTo').innerHTML = PEOPLE.filter(p => p !== me).map(p => `<option>${p}</option>`).join('') + '<option>Everyone</option>';
+    goFolder('inbox');
+  };
+});
+el('switchAcct').onclick = () => { me = null; el('app').classList.remove('on'); el('loginScreen').style.display = 'flex'; };
+
+document.querySelectorAll('.folder').forEach(f => f.onclick = () => goFolder(f.dataset.folder));
+function goFolder(f){
+  folder = f;
+  document.querySelectorAll('.folder').forEach(x => x.classList.toggle('active', x.dataset.folder === f));
+  selectedKey = null;
+  el('reader').innerHTML = '<div id="readerEmpty">Select a message</div>';
+  const path = f === 'inbox' ? 'trimail/inbox/' + me : 'trimail/sent/' + me;
+  db.ref(path).off();
+  db.ref(path).on('value', snap => { mails = snap.val() || {}; renderList(); updateUnread(); });
+}
+function updateUnread(){
+  db.ref('trimail/inbox/' + me).once('value').then(snap => {
+    const v = snap.val() || {};
+    const n = Object.values(v).filter(m => !m.read).length;
+    el('unreadCount').textContent = n ? n : '';
+  });
+}
+
+function fmtTime(ts){ const d = new Date(ts); return d.toLocaleDateString([], {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+
+function renderList(){
+  const wrap = el('list');
+  const keys = Object.keys(mails).sort((a,b) => mails[b].ts - mails[a].ts);
+  if (!keys.length) { wrap.innerHTML = '<div id="emptyList">Nothing here.</div>'; return; }
+  wrap.innerHTML = '';
+  for (const k of keys) {
+    const m = mails[k];
+    const row = document.createElement('div');
+    row.className = 'mailRow' + (folder === 'inbox' && !m.read ? ' unread' : '') + (k === selectedKey ? ' active' : '');
+    row.innerHTML = `<div class="mFrom">${folder === 'inbox' ? esc(m.from) : 'To: ' + esc(m.to)}<span class="mTime">${fmtTime(m.ts)}</span></div>
+      <div class="mSubj">${esc(m.subject || '(no subject)')}</div>
+      <div class="mPrev">${esc((m.body || '').slice(0, 70))}</div>`;
+    row.onclick = () => openMail(k, m, row);
+    wrap.appendChild(row);
+  }
+}
+
+function openMail(k, m, row){
+  selectedKey = k;
+  document.querySelectorAll('.mailRow').forEach(r => r.classList.remove('active'));
+  row.classList.add('active');
+  if (folder === 'inbox' && !m.read) {
+    db.ref('trimail/inbox/' + me + '/' + k + '/read').set(true);
+    m.read = true; row.classList.remove('unread'); updateUnread();
+  }
+  let att = m.file ? `<div class="attRow" id="attDl">&#128206; ${esc(m.file.name)} (${Math.round(m.file.size/1024)} KB)</div>` : '';
+  el('reader').innerHTML = `<div id="rSubj">${esc(m.subject || '(no subject)')}</div>
+    <div id="rMeta">${folder === 'inbox' ? 'From ' + esc(m.from) : 'To ' + esc(m.to)} &middot; ${fmtTime(m.ts)}</div>
+    <div id="rBody">${esc(m.body || '')}</div>${att}
+    <div id="rActions">${folder === 'inbox' ? '<button class="btn" id="rReply">Reply</button> ' : ''}<button class="btn danger" id="rDel">Delete</button></div>`;
+  if (m.file) el('attDl').onclick = () => { const a = document.createElement('a'); a.href = m.file.data; a.download = m.file.name; a.click(); };
+  const rr = el('rReply'); if (rr) rr.onclick = () => openCompose(m.from, 'Re: ' + (m.subject || ''));
+  el('rDel').onclick = () => {
+    const path = folder === 'inbox' ? 'trimail/inbox/' + me + '/' + k : 'trimail/sent/' + me + '/' + k;
+    db.ref(path).remove();
+    el('reader').innerHTML = '<div id="readerEmpty">Select a message</div>';
+  };
+}
+
+el('composeBtn').onclick = () => openCompose();
+function openCompose(to, subj){
+  el('cTo').value = to || el('cTo').options[0].value;
+  el('cSubj').value = subj || '';
+  el('cBody').value = '';
+  el('cFile').value = '';
+  el('composeOv').classList.add('on');
+}
+el('cCancel').onclick = () => el('composeOv').classList.remove('on');
+el('cSend').onclick = () => {
+  const to = el('cTo').value, subject = el('cSubj').value.trim(), body = el('cBody').value;
+  const f = el('cFile').files[0];
+  const recipients = to === 'Everyone' ? PEOPLE.filter(p => p !== me) : [to];
+  const doSend = (fileObj) => {
+    const ts = Date.now();
+    for (const r of recipients) {
+      const mail = { from: me, to: r, subject, body, ts, read: false, file: fileObj || null };
+      db.ref('trimail/inbox/' + r).push(mail);
+    }
+    db.ref('trimail/sent/' + me).push({ from: me, to, subject, body, ts, file: fileObj || null });
+    el('composeOv').classList.remove('on');
+  };
+  if (f) {
+    if (f.size > MAX_FILE) return alert('That attachment is too big (keep it under ~700 KB). Use Files/shared folders for bigger files.');
+    const r = new FileReader();
+    r.onload = () => doSend({ name: f.name, size: f.size, data: r.result });
+    r.readAsDataURL(f);
+  } else doSend(null);
+};
+</script>
+</body>
+</html>
