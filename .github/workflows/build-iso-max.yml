@@ -39,7 +39,15 @@ jobs:
         run: |
           mkdir -p out
           ( cd shell && zip -qr ../out/shell-update.zip . -x 'node_modules/*' 'test*' )
-          cp out/shell-update.zip out/TriOS-MAX.triupdate
+          # .triupdate = shell-update.zip's contents PLUS a system/ folder (same
+          # layout as this repo's system/), so a future .triupdate can also patch
+          # things like the trifs script, not just the Electron shell.
+          REPO="$PWD"
+          rm -rf /tmp/triupdate && mkdir -p /tmp/triupdate
+          ( cd "$REPO/shell" && zip -qr /tmp/triupdate/base.zip . -x 'node_modules/*' 'test*' )
+          ( cd /tmp/triupdate && unzip -q base.zip -d . && rm base.zip )
+          cp -a "$REPO/system" /tmp/triupdate/system
+          ( cd /tmp/triupdate && zip -qr "$REPO/out/TriOS-MAX.triupdate" . )
           ls -la out/shell-update.zip out/TriOS-MAX.triupdate
 
       - name: Boot test in QEMU (best effort — real use is in VirtualBox)

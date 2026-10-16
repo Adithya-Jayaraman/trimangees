@@ -107,7 +107,9 @@ async function runTriUpdate(filePath) {
   if (r && r.ok) {
     const pkgNote = r.packages && r.packages.installed && r.packages.installed.length
       ? `<div class="tw-sub">Installed ${r.packages.installed.length} new package(s) too.</div>` : "";
-    card.innerHTML = `<div class="tw-title">Update installed</div>${pkgNote}<div class="tw-sub">Restarting…</div><div class="tw-spin"></div>`;
+    const escHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const sysNote = r.system ? `<div class="tw-sub">${r.system.ok ? "System tools updated too." : "Note: the system-tools part of this update didn't apply — " + escHtml(r.system.detail || "")}</div>` : "";
+    card.innerHTML = `<div class="tw-title">Update installed</div>${pkgNote}${sysNote}<div class="tw-sub">Restarting…</div><div class="tw-spin"></div>`;
     setTimeout(() => kernel.restartShell(), 1200);
   } else {
     card.innerHTML = `<div class="tw-title">Update failed</div><div class="tw-sub">${(r && r.error) || "Something went wrong."}</div>

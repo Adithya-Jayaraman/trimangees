@@ -559,8 +559,23 @@ ipcMain.handle('update:install', async (e, { zip }) => {
       pkgResult = { installed: debs, ok: r2.ok };
     }
   }
+  // A .triupdate can also carry a system/ folder — the exact same layout as
+  // this repo's system/ directory (system/usr/local/sbin/trifs, systemd
+  // units, etc.). It's overlaid straight onto the real root filesystem, so a
+  // fix to something like the trifs script itself doesn't need a whole new
+  // ISO. /usr and /etc are already kept across reboots by the persistence
+  // overlay, so this survives too — and it still never touches TriFS/home.
+  const sysDir2 = path.join(root, 'system');
+  let sysResult = null;
+  if (fs.existsSync(sysDir2)) {
+    const r3 = await run(
+      `sudo -n cp -a ${shq(sysDir2)}/. / 2>&1 && ` +
+      `sudo -n chmod +x /usr/local/sbin/trifs 2>/dev/null; ` +
+      `sudo -n systemctl daemon-reload 2>&1`, 60000);
+    sysResult = { ok: r3.ok, detail: r3.ok ? '' : (r3.err || r3.out).slice(0, 300) };
+  }
   await run(`rm -rf ${shq(dest + '.prev')}; [ -d ${shq(dest)} ] && mv ${shq(dest)} ${shq(dest + '.prev')}; mv ${shq(root)} ${shq(dest)}; rm -rf ${shq(tmp)}`, 60000);
-  return { ok: true, packages: pkgResult };
+  return { ok: true, packages: pkgResult, system: sysResult };
 });
 ipcMain.handle('update:revert', async () => {
   const base = fsr.real('/system');

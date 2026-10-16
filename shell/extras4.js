@@ -235,7 +235,9 @@
     const o = main.querySelector("#up-o");
     const done = async (r) => {
       if (!r.ok) { o.textContent = "Failed: " + r.error; return; }
-      o.textContent = (r.packages && r.packages.installed.length ? `Installed ${r.packages.installed.length} new package(s). ` : "") + "Restarting the desktop…";
+      o.textContent = (r.packages && r.packages.installed.length ? `Installed ${r.packages.installed.length} new package(s). ` : "")
+        + (r.system ? (r.system.ok ? "System tools updated too. " : "") : "")
+        + "Restarting the desktop…";
       setTimeout(() => kernel.restartShell(), 800);
     };
     main.querySelector("#up-get").onclick = async () => {
