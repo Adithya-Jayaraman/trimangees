@@ -89,4 +89,8 @@ echo "ISO size: $((SIZE/1024/1024)) MB"
 if [ "$SIZE" -gt 1900000000 ]; then
   echo "### splitting (over 1.9 GB)"; split -b 1900000000 -d -a 2 "$ISOFILE" "$ISOFILE.part"; rm "$ISOFILE"
 fi
+# Hand $OUT back to whoever actually invoked this script (it ran under sudo,
+# so without this, a later non-root step — like zipping shell-update.zip —
+# can't write into it).
+if [ -n "${SUDO_UID:-}" ]; then chown -R "$SUDO_UID:$SUDO_GID" "$OUT" 2>/dev/null || true; fi
 echo "DONE"
