@@ -582,6 +582,36 @@ ipcMain.handle('update:install', async (e, { zip }) => {
   await run(`rm -rf ${shq(dest + '.prev')}; [ -d ${shq(dest)} ] && mv ${shq(dest)} ${shq(dest + '.prev')}; mv ${shq(root)} ${shq(dest)}; rm -rf ${shq(tmp)}`, 60000);
   return { ok: true, packages: pkgResult, system: sysResult };
 });
+// Check-and-fetch the newest update straight from GitHub Releases, entirely
+// from inside the OS — no host drag-and-drop, no browser, no USB juggling.
+// Finds the release that matches this build (MAX / Lite / regular all share
+// one repo, so we match the tag prefix each workflow uses) and grabs
+// whichever asset actually applies here.
+ipcMain.handle('update:checkOnline', async () => {
+  try {
+    const REPO = 'Adithya-Jayaraman/trimangees';
+    const prefix = isMax ? 'max-build-' : isLite ? 'lite-build-' : 'build-';
+    const netFetch = require('electron').net.fetch;
+    const headers = { 'User-Agent': 'TrimangeesOS', 'Accept': 'application/vnd.github+json' };
+    const rl = await netFetch(`https://api.github.com/repos/${REPO}/releases?per_page=15`, { headers });
+    if (!rl.ok) return { ok: false, error: 'Could not reach GitHub (HTTP ' + rl.status + ')' };
+    const releases = await rl.json();
+    const rel = Array.isArray(releases) ? releases.find((r) => (r.tag_name || '').startsWith(prefix)) : null;
+    if (!rel) return { ok: false, error: 'No matching release found yet.' };
+    const assets = rel.assets || [];
+    const pick = assets.find((a) => /\.triupdate$/i.test(a.name)) || assets.find((a) => /shell-update\.zip$/i.test(a.name));
+    if (!pick) return { ok: false, error: 'That release has nothing installable in it.' };
+    const rf = await netFetch(pick.browser_download_url, { headers: { 'User-Agent': 'TrimangeesOS' } });
+    if (!rf.ok) return { ok: false, error: 'Download failed (HTTP ' + rf.status + ')' };
+    const buf = Buffer.from(await rf.arrayBuffer());
+    const dlDir = currentUser ? `/home/${currentUser}/Downloads` : '/home';
+    try { fs.mkdirSync(fsr.real(dlDir), { recursive: true }); } catch {}
+    const vTarget = fsr.uniqueChild(dlDir, pick.name);
+    fs.writeFileSync(fsr.real(vTarget), buf);
+    fsChanged();
+    return { ok: true, path: vTarget, tag: rel.tag_name, name: pick.name };
+  } catch (err) { return { ok: false, error: err.message }; }
+});
 ipcMain.handle('update:revert', async () => {
   const base = fsr.real('/system');
   await run(`rm -rf ${shq(path.join(base, 'shell-override'))}`, 30000);

@@ -1933,7 +1933,21 @@ function buildSettings(body, w) {
       </div>
 
       <button class="set-btn" id="sys-reload" style="margin-top:16px">&#8635; Reload apps from cloud</button>
+      ${IS_MAX ? `<button class="set-btn primary" id="sys-update-online" style="margin-top:10px">&#8681; Check for updates online</button>
+      <div class="set-note" id="sys-update-note" style="margin-top:2px">Fetches the newest update straight from GitHub and installs it &mdash; no file to drag in, nothing to download by hand.</div>` : ""}
       <p class="set-note">Forged in the Central Storm &#9928;</p>`;
+    const upBtn = main.querySelector("#sys-update-online");
+    if (upBtn) upBtn.onclick = async () => {
+      upBtn.disabled = true; upBtn.textContent = "Checking…";
+      const r = await kernel.updateCheckOnline();
+      if (r && r.ok) {
+        upBtn.textContent = "Installing…";
+        await runTriUpdate(r.path);
+      } else {
+        upBtn.disabled = false; upBtn.textContent = "↓ Check for updates online";
+        toast("Couldn't check for updates", (r && r.error) || "Something went wrong.");
+      }
+    };
     Cloud.status().then(ok => {
       const el = main.querySelector("#sys-fb");
       if (el) { el.textContent = ok ? "Connected" : "Offline (using built-ins)"; el.className = ok ? "ok" : "warn"; }

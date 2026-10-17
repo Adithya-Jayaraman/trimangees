@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('kernel', {
   backupList: (user) => ipcRenderer.invoke('backup:list', { user }),
   backupRestore: (user, name) => ipcRenderer.invoke('backup:restore', { user, name }),
   updateInstall: (zip) => ipcRenderer.invoke('update:install', { zip }),
+  updateCheckOnline: () => ipcRenderer.invoke('update:checkOnline'),
   updateRevert: () => ipcRenderer.invoke('update:revert'),
   updateStatus: () => ipcRenderer.invoke('update:status'),
   termKill: (id)           => ipcRenderer.invoke('term:kill', { id }),
