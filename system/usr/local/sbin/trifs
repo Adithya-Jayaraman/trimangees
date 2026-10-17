@@ -193,7 +193,7 @@ cmd_scan() {
       [ -z "$mp" ] && found=$(echo "$found" | jq -c --arg d "$dev" --argjson s "$size" '. + [{dev:$d,size:$s}]')
       continue
     fi
-    case "$fst" in ntfs|exfat|ext4|ext3) ;; *) continue ;; esac
+    case "$fst" in ntfs|exfat|vfat|ext4|ext3) ;; *) continue ;; esac
     hmp="$mp"; had=1
     if [ -z "$hmp" ]; then
       hmp=$(host_mount "$dev" ro) || continue
