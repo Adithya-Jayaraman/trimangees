@@ -547,6 +547,18 @@ body.preset-3 {   /* Storm */
 .confirm-box .c-yes { background: #a52830; border-color: #ff7a7a; }
 .confirm-box button:hover { filter: brightness(1.25); }
 
+/* ── Shared "pick a file" overlay (apps use this, never a native dialog) ── */
+.pickfile-box { width: 420px; max-height: 70vh; display: flex; flex-direction: column; }
+.pf-title { font-weight: 600; font-size: 13.5px; margin-bottom: 8px; }
+.pf-addr { font-size: 11px; color: var(--muted, #9aa0c0); margin-bottom: 6px; word-break: break-all; }
+.pf-list { flex: 1; min-height: 220px; max-height: 320px; overflow-y: auto; border: 1px solid var(--panel-border); border-radius: 8px; background: rgba(0,0,0,.18); padding: 4px; }
+.pf-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12.5px; cursor: pointer; user-select: none; }
+.pf-row:hover { background: rgba(255,255,255,.07); }
+.pf-row.sel { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.pf-ic { font-size: 14px; }
+.pf-empty { padding: 20px; text-align: center; font-size: 12px; color: var(--muted, #9aa0c0); }
+.pf-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+
 /* ── Inline rename in the explorer ────────────────────────── */
 .rename-inp {
   flex: 1; height: 20px; padding: 0 6px; font-size: 12.5px;

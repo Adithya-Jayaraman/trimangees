@@ -255,26 +255,31 @@ ipcMain.handle('fs:reset', () => {
     return { ok: true };
   } catch (err) { return { ok: false, error: err.message }; }
 });
-// Backup / restore this account's home as a .tgz anywhere the user picks
+// Backup / restore this account's home as a .tgz. This never shows a native
+// file dialog (TrimangeesOS only ever shows its own File Explorer) — it
+// always reads/writes one well-known file in the account's own Documents
+// folder, so there's nothing to "browse" to in the first place.
+function backupPath(user) {
+  return path.join(fsr.real('/home/' + user), 'Documents', `${user}-backup.tgz`);
+}
 ipcMain.handle('fs:backup', async () => {
   try {
     if (!currentUser) return { ok: false, error: 'nobody is signed in' };
-    const { canceled, filePath } = await dialog.showSaveDialog(win, {
-      title: 'Back up my home folder', defaultPath: path.join(fsr.real('/home/' + currentUser), 'Documents', `${currentUser}-backup.tgz`),
-      filters: [{ name: 'Backup', extensions: ['tgz'] }] });
-    if (canceled || !filePath) return { ok: false, canceled: true };
-    await new Promise((res, rej) => execFile('tar', ['-czf', filePath, '--exclude=./.wine', '--exclude=./.cache', '-C', fsr.real('/home/' + currentUser), '.'],
+    const filePath = backupPath(currentUser);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    await new Promise((res, rej) => execFile('tar', ['-czf', filePath, '--exclude=./.wine', '--exclude=./.cache',
+      '--exclude=./Documents/' + currentUser + '-backup.tgz', '-C', fsr.real('/home/' + currentUser), '.'],
       { maxBuffer: 1 << 20 }, (er) => er ? rej(er) : res()));
-    return { ok: true, path: filePath };
+    fsChanged();
+    return { ok: true, path: '/home/' + currentUser + '/Documents/' + currentUser + '-backup.tgz' };
   } catch (err) { return { ok: false, error: err.message }; }
 });
 ipcMain.handle('fs:restore', async () => {
   try {
     if (!currentUser) return { ok: false, error: 'nobody is signed in' };
-    const { canceled, filePaths } = await dialog.showOpenDialog(win, { title: 'Restore a backup', properties: ['openFile'],
-      filters: [{ name: 'Backup', extensions: ['tgz', 'tar.gz'] }] });
-    if (canceled || !filePaths || !filePaths[0]) return { ok: false, canceled: true };
-    await new Promise((res, rej) => execFile('tar', ['-xzf', filePaths[0], '-C', fsr.real('/home/' + currentUser)], (er) => er ? rej(er) : res()));
+    const filePath = backupPath(currentUser);
+    if (!fs.existsSync(filePath)) return { ok: false, error: `no backup found yet — use "Back up" first (it saves to Documents/${currentUser}-backup.tgz)` };
+    await new Promise((res, rej) => execFile('tar', ['-xzf', filePath, '-C', fsr.real('/home/' + currentUser)], (er) => er ? rej(er) : res()));
     fsChanged();
     return { ok: true };
   } catch (err) { return { ok: false, error: err.message }; }

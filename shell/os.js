@@ -1002,6 +1002,79 @@ function confirmDialog(msg) {
 }
 
 // ============================================================
+// Shared "pick a file" overlay — this is the one and only place
+// that lets an app choose a file from disk. It browses the exact
+// same TriFS the Explorer app shows, through the same kernel calls
+// (listDir/readFileB64), so nothing but Trimangees's own Explorer UI
+// is ever shown for this — no native OS file-chooser window.
+// Exposed on window so apps running in an iframe (ChatTrimangees,
+// TriMAIL, …) can call window.parent.osPickFile(...) directly.
+// ============================================================
+function osPickFile(opts = {}) {
+  return new Promise(async (resolve) => {
+    const title = opts.title || "Choose a file";
+    const start = opts.start || (CURRENT_USER ? `/home/${CURRENT_USER}` : "/");
+    const ov = document.createElement("div");
+    ov.className = "confirm-ov pickfile-ov";
+    ov.innerHTML = `
+      <div class="confirm-box pickfile-box">
+        <div class="pf-title">${title}</div>
+        <div class="pf-addr"></div>
+        <div class="pf-list"></div>
+        <div class="pf-foot">
+          <button class="c-no pf-cancel">Cancel</button>
+          <button class="c-yes pf-open" disabled>Open</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const listEl = ov.querySelector(".pf-list");
+    const addrEl = ov.querySelector(".pf-addr");
+    const openBtn = ov.querySelector(".pf-open");
+    let cur = start, picked = null;
+    const close = (val) => { ov.remove(); resolve(val); };
+    ov.querySelector(".pf-cancel").onclick = () => close(null);
+    openBtn.onclick = () => picked && close(picked);
+
+    async function render(dir) {
+      const r = await kernel.listDir(dir, false);
+      if (!r || !r.ok) { listEl.innerHTML = `<div class="pf-empty">Can't open that folder.</div>`; return; }
+      cur = r.dir; picked = null; openBtn.disabled = true;
+      addrEl.textContent = cur;
+      const rows = [];
+      if (r.parent && r.parent !== cur) rows.push(`<div class="pf-row pf-up" data-dir="${r.parent}">⤴ ..</div>`);
+      for (const e of r.entries) {
+        if (!e.isDir && opts.accept && !opts.accept.test(e.name)) continue;
+        rows.push(`<div class="pf-row ${e.isDir ? "pf-dir" : "pf-file"}" data-name="${e.name}" data-dir="${e.isDir}">
+          <span class="pf-ic">${e.isDir ? "\u{1F4C1}" : "\u{1F4C4}"}</span>${e.name}</div>`);
+      }
+      listEl.innerHTML = rows.length ? rows.join("") : `<div class="pf-empty">Nothing to pick here.</div>`;
+      listEl.querySelectorAll(".pf-up").forEach(el => el.onclick = () => render(el.dataset.dir));
+      listEl.querySelectorAll(".pf-dir").forEach(el => el.ondblclick = () => render(cur.replace(/\/$/, "") + "/" + el.dataset.name));
+      listEl.querySelectorAll(".pf-file").forEach(el => el.onclick = () => {
+        listEl.querySelectorAll(".pf-row").forEach(r2 => r2.classList.remove("sel"));
+        el.classList.add("sel");
+        picked = (cur.replace(/\/$/, "") || "") + "/" + el.dataset.name;
+        openBtn.disabled = false;
+      });
+    }
+    render(start);
+  });
+}
+window.osPickFile = osPickFile;
+// Read a picked file back as a data: URL (small files only — attachments etc).
+async function osReadFileAsDataURL(vpath) {
+  const r = await kernel.readFileB64(vpath);
+  if (!r || !r.ok) return null;
+  const name = vpath.split("/").pop();
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const mimes = { png:"image/png", jpg:"image/jpeg", jpeg:"image/jpeg", gif:"image/gif", webp:"image/webp",
+    pdf:"application/pdf", txt:"text/plain", mp3:"audio/mpeg", mp4:"video/mp4" };
+  const mime = mimes[ext] || "application/octet-stream";
+  return { name, size: Math.ceil(r.b64.length * 0.75), data: `data:${mime};base64,${r.b64}` };
+}
+window.osReadFileAsDataURL = osReadFileAsDataURL;
+
+// ============================================================
 // Context menu
 // ============================================================
 function showContextMenu(x, y, items) {

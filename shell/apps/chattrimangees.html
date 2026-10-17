@@ -98,7 +98,6 @@
     <div id="typing"></div>
     <div id="composer">
       <button class="iconBtn" id="fileBtn" title="Send a file">&#128206;</button>
-      <input type="file" id="fileInput" hidden>
       <textarea id="msgInput" rows="1" placeholder="Message… (@name to mention)"></textarea>
       <button id="sendBtn">&#10148;</button>
     </div>
@@ -256,18 +255,17 @@ function send(){
   setTyping(false);
 }
 
-el('fileBtn').onclick = () => el('fileInput').click();
-el('fileInput').onchange = () => {
-  const f = el('fileInput').files[0]; if (!f) return;
-  if (f.size > MAX_FILE) { alert('That file is too big to share here (keep it under ~700 KB). Use a shared folder in Files for bigger files.'); el('fileInput').value = ''; return; }
-  const r = new FileReader();
-  r.onload = () => {
-    const key = genKey(), payload = { from: me, ts: Date.now(), file: { name: f.name, size: f.size, data: r.result } };
-    addMsg(key, payload);
-    queueSend(room, key, payload);
-    el('fileInput').value = '';
-  };
-  r.readAsDataURL(f);
+// File picker: TrimangeesOS's own Explorer-style picker (never a native OS
+// dialog) via the parent desktop, which can also read the chosen file.
+el('fileBtn').onclick = async () => {
+  const path = await (window.parent.osPickFile ? window.parent.osPickFile({ title: 'Send a file' }) : null);
+  if (!path) return;
+  const f = await window.parent.osReadFileAsDataURL(path);
+  if (!f) { alert("Couldn't read that file."); return; }
+  if (f.size > MAX_FILE) { alert('That file is too big to share here (keep it under ~700 KB). Use a shared folder in Files for bigger files.'); return; }
+  const key = genKey(), payload = { from: me, ts: Date.now(), file: { name: f.name, size: f.size, data: f.data } };
+  addMsg(key, payload);
+  queueSend(room, key, payload);
 };
 
 function setupPresence(){

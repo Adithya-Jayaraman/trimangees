@@ -103,7 +103,8 @@
     <select id="cTo"></select>
     <input id="cSubj" placeholder="Subject">
     <textarea id="cBody" placeholder="Write your message…"></textarea>
-    <input type="file" id="cFile">
+    <button class="btn" id="cFileBtn" type="button" style="align-self:flex-start">Attach a file…</button>
+    <div id="cFileName" style="font-size:11.5px;color:var(--muted,#9aa0c0)"></div>
     <div id="composeFoot">
       <button class="btn" id="cCancel">Cancel</button>
       <button class="btn" id="cSend" style="background:var(--accent);color:#1a1300;border:none;font-weight:700">Send</button>
@@ -222,37 +223,42 @@ function openMail(k, m, row){
 }
 
 el('composeBtn').onclick = () => openCompose();
+let composeAttachment = null;
 function openCompose(to, subj){
   el('cTo').value = to || el('cTo').options[0].value;
   el('cSubj').value = subj || '';
   el('cBody').value = '';
-  el('cFile').value = '';
+  composeAttachment = null;
+  el('cFileName').textContent = '';
   el('composeOv').classList.add('on');
 }
 el('cCancel').onclick = () => el('composeOv').classList.remove('on');
+// Attach: TrimangeesOS's own Explorer-style picker (never a native OS
+// dialog) via the parent desktop, which can also read the chosen file.
+el('cFileBtn').onclick = async () => {
+  const path = await (window.parent.osPickFile ? window.parent.osPickFile({ title: 'Attach a file' }) : null);
+  if (!path) return;
+  const f = await window.parent.osReadFileAsDataURL(path);
+  if (!f) { alert("Couldn't read that file."); return; }
+  if (f.size > MAX_FILE) { alert('That attachment is too big (keep it under ~700 KB). Use Files/shared folders for bigger files.'); return; }
+  composeAttachment = f;
+  el('cFileName').textContent = f.name;
+};
 el('cSend').onclick = () => {
   const to = el('cTo').value, subject = el('cSubj').value.trim(), body = el('cBody').value;
-  const f = el('cFile').files[0];
+  const fileObj = composeAttachment;
   const recipients = to === 'Everyone' ? PEOPLE.filter(p => p !== me) : [to];
-  const doSend = (fileObj) => {
-    const ts = Date.now();
-    for (const r of recipients) {
-      const mail = { from: me, to: r, subject, body, ts, read: false, file: fileObj || null };
-      queueWrite('trimail/inbox/' + r + '/' + genKey(), mail);
-    }
-    const sentKey = genKey(), sentMail = { from: me, to, subject, body, ts, file: fileObj || null };
-    queueWrite('trimail/sent/' + me + '/' + sentKey, sentMail);
-    // reflect in my own Sent folder immediately, online or not
-    const localSent = loadLocalMail(me, 'sent'); localSent[sentKey] = sentMail; saveLocalMail(me, 'sent', localSent);
-    if (folder === 'sent') { mails = localSent; renderList(); }
-    el('composeOv').classList.remove('on');
-  };
-  if (f) {
-    if (f.size > MAX_FILE) return alert('That attachment is too big (keep it under ~700 KB). Use Files/shared folders for bigger files.');
-    const r = new FileReader();
-    r.onload = () => doSend({ name: f.name, size: f.size, data: r.result });
-    r.readAsDataURL(f);
-  } else doSend(null);
+  const ts = Date.now();
+  for (const r of recipients) {
+    const mail = { from: me, to: r, subject, body, ts, read: false, file: fileObj || null };
+    queueWrite('trimail/inbox/' + r + '/' + genKey(), mail);
+  }
+  const sentKey = genKey(), sentMail = { from: me, to, subject, body, ts, file: fileObj || null };
+  queueWrite('trimail/sent/' + me + '/' + sentKey, sentMail);
+  // reflect in my own Sent folder immediately, online or not
+  const localSent = loadLocalMail(me, 'sent'); localSent[sentKey] = sentMail; saveLocalMail(me, 'sent', localSent);
+  if (folder === 'sent') { mails = localSent; renderList(); }
+  el('composeOv').classList.remove('on');
 };
 </script>
 </body>
