@@ -157,9 +157,9 @@ function renderUserDriveWizard(user, scan, note) {
       <button class="set-btn primary" data-use="${d.dev}">Use for ${user}</button></div>`).join("");
   }
   if (blank.length) {
-    html += `<div class="tw-h">Blank disks <small>formatted as exFAT — readable on Windows/Mac directly</small></div>` + blank.map(d => `
+    html += `<div class="tw-h">Blank disks <small>one pick sets up everything on it — formatted as exFAT, readable on Windows/Mac directly</small></div>` + blank.map(d => `
       <div class="tw-row"><div><b>${d.model || "Disk"}</b><span>${twFmt(d.size)} &middot; ${d.dev}</span></div>
-      <button class="set-btn primary" data-use="${d.dev}">Use this disk</button></div>`).join("");
+      <button class="set-btn primary" data-blank="${d.dev}">Use this disk</button></div>`).join("");
   }
   if (!already.length && !blank.length && scan && scan.ok !== false) {
     html += `<div class="tw-note">No free drive found for ${user} yet. Plug one in, then scan again.</div>`;
@@ -171,16 +171,41 @@ function renderUserDriveWizard(user, scan, note) {
   udwEl.innerHTML = ""; udwEl.appendChild(card);
 
   const busy = (text) => { card.innerHTML = `<div class="tw-title">Setting up…</div><div class="tw-sub">${text}</div><div class="tw-spin"></div>`; };
-  card.querySelectorAll("[data-use]").forEach(b => b.onclick = async () => {
-    busy(`Setting up ${user}'s drive. This takes a few seconds…`);
-    const r = await kernel.trifsUserAssign(user, b.dataset.use);
+  const finishAssign = (r, restart) => {
     if (r && r.ok) {
       card.innerHTML = `<div class="tw-title">${user}'s drive is ready</div><div class="tw-sub">Labelled ${r.label}. Plug this drive into Windows or Mac and you'll see ${user}'s files directly — no conversion needed.</div>`;
       udwSkipped[user] = true;
-      setTimeout(() => { udwEl.hidden = true; seedPlaceholders(user); }, 1600);
-    } else {
-      renderUserDriveWizard(user, await kernel.trifsUserScan(), { err: true, text: (r && r.error) || "Something went wrong." });
+      setTimeout(() => { udwEl.hidden = true; seedPlaceholders(user); if (restart) kernel.trifsRestart(); }, 1600);
+      return true;
     }
+    return false;
+  };
+  // An already-formatted drive (including a shared TRIFS-SHARED partition
+  // someone else's combo pick already made) — use it as-is.
+  card.querySelectorAll("[data-use]").forEach(b => b.onclick = async () => {
+    busy(`Setting up ${user}'s drive. This takes a few seconds…`);
+    const r = await kernel.trifsUserAssign(user, b.dataset.use);
+    if (!finishAssign(r, false)) renderUserDriveWizard(user, await kernel.trifsUserScan(), { err: true, text: (r && r.error) || "Something went wrong." });
+  });
+  // A truly blank disk: one pick does both jobs at once. If nothing on this
+  // computer is keeping settings/packages yet, split it (hidden system part
+  // + this account's shared part) so you never had to visit a separate
+  // "set up TriFS" screen at all. If another account already did that
+  // elsewhere, this disk just becomes this account's own plain drive.
+  card.querySelectorAll("[data-blank]").forEach(b => b.onclick = async () => {
+    busy(`Setting up ${user}'s drive. This takes a few seconds…`);
+    const dev = b.dataset.blank;
+    const st = await kernel.trifsStatus().catch(() => null);
+    let r, restart = false;
+    if (IS_MAX && !(st && st.mounted)) {
+      const cf = await kernel.trifsComboFormat(dev, 4);
+      if (!cf || !cf.ok) { renderUserDriveWizard(user, await kernel.trifsUserScan(), { err: true, text: (cf && cf.error) || "Couldn't set up that disk." }); return; }
+      r = await kernel.trifsUserAssign(user, cf.shared);
+      restart = true;
+    } else {
+      r = await kernel.trifsUserAssign(user, dev);
+    }
+    if (!finishAssign(r, restart)) renderUserDriveWizard(user, await kernel.trifsUserScan(), { err: true, text: (r && r.error) || "Something went wrong." });
   });
   card.querySelector("#udw-rescan").onclick = () => showUserDriveWizard(user);
   card.querySelector("#udw-skip").onclick = () => {
