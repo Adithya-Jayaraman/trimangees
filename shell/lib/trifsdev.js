@@ -48,6 +48,10 @@ module.exports = {
   unmount: () => run(['unmount'], 60000),
   unmountSync: () => runSync(['unmount'], 30000),
 
+  // TriOS MAX: one blank disk -> everything (hidden system part + a shared
+  // exFAT part any account can then pick in userAssign).
+  comboFormat: (disk, sysgb) => run(['combo-format', String(disk), String(Math.floor(Number(sysgb) || 4))]),
+
   // TriOS MAX: each account picks its own drive, independent of the others.
   userScan:      ()              => usable() ? run(['user-scan'], 120000) : Promise.resolve({ ok: true, drives: [] }),
   userAssign:    (user, dev)     => run(['user-assign', String(user), String(dev)], 5 * 60 * 1000),

@@ -99,6 +99,7 @@ contextBridge.exposeInMainWorld('kernel', {
 
   // TriOS MAX: per-account drives
   isMax:              ()           => ipcRenderer.invoke('sys:max'),
+  trifsComboFormat:   (disk, sysgb) => ipcRenderer.invoke('trifs:comboFormat', { disk, sysgb }),
   trifsUserScan:      ()           => ipcRenderer.invoke('trifs:userScan'),
   trifsUserAssign:    (user, dev)  => ipcRenderer.invoke('trifs:userAssign', { user, dev }),
   trifsUserMount:     (user)       => ipcRenderer.invoke('trifs:userMount', { user }),

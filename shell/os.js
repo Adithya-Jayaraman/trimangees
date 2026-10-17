@@ -2399,7 +2399,11 @@ function renderTriFSWizard(scan, note) {
   if (blank.length) {
     html += `<div class="tw-h">Blank disks <small>nothing on them, so nothing is lost</small></div>` + blank.map(d => `
       <div class="tw-row"><div><b>${d.model || "Disk"}</b><span>${twFmt(d.size)} &middot; ${d.dev}</span></div>
-      <button class="set-btn primary" data-fmt="${d.dev}">Use this disk</button></div>`).join("");
+      <span class="tw-size">
+        <button class="set-btn primary" data-fmt="${d.dev}">Just the system</button>
+        ${IS_MAX ? `<button class="set-btn primary" data-combo="${d.dev}">Use this whole disk for everything</button>` : ""}
+      </span></div>`).join("");
+    if (IS_MAX) html += `<div class="tw-note">"Use this whole disk for everything" splits it into a small hidden system part and one shared exFAT part — pick that if you don't want to juggle a separate drive for your own files.</div>`;
   }
   if (hosts.length) {
     html += `<div class="tw-h">Use free space on a drive <small>makes one file called TriFS.img &mdash; nothing else on the drive is touched</small></div>` +
@@ -2440,6 +2444,18 @@ function renderTriFSWizard(scan, note) {
     const gb = +card.querySelector(`[data-gb="${b.dataset.img}"]`).value;
     busy(`Creating a ${gb} GB TriFS file. Big drives can take a minute&hellip;`);
     done(await kernel.trifsCreateImg(b.dataset.img, gb));
+  });
+  card.querySelectorAll("[data-combo]").forEach(b => b.onclick = async () => {
+    busy("Splitting the disk into a system part and a shared part. This takes a few seconds…");
+    const r = await kernel.trifsComboFormat(b.dataset.combo, 4);
+    if (r && r.ok) {
+      card.innerHTML = `<div class="tw-title">All set</div><div class="tw-sub">The system part is mounted. The rest of the disk is ready as a shared drive —
+        when you log in, pick it on the "Choose your drive" screen and it's yours (or shared with anyone else who picks it too, each gets their own folder).
+        Restarting the desktop…</div><div class="tw-spin"></div>`;
+      setTimeout(() => kernel.trifsRestart(), 1600);
+    } else {
+      renderTriFSWizard(await kernel.trifsScan(), { err: true, text: (r && r.error) || "Something went wrong." });
+    }
   });
   card.querySelector("#tw-rescan").onclick = () => showTriFSWizard();
   card.querySelector("#tw-skip").onclick = () => { twSkipped = true; twEl.hidden = true; toast("Temporary session", "Nothing will be saved. Set up TriFS any time in Settings \u2192 System."); };

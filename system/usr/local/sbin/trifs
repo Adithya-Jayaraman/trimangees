@@ -383,6 +383,43 @@ cmd_user_scan() {
   jq -nc --argjson d "$out" '{ok:true,drives:$d}'
 }
 
+# One blank disk -> everything: a small hidden ext4 partition for the
+# system (installed packages, settings — the usual TriFS job) plus the rest
+# of the disk as one shared exFAT partition. Mounts the system partition
+# right away; the exFAT one shows up afterwards in user-scan as a normal
+# already-formatted choice (labelled TRIFS-SHARED) that any account —
+# or several accounts at once — can pick, each getting its own folder on it.
+cmd_combo_format() {
+  local disk="$1" sysgb="${2:-4}" part1 part2
+  [ -b "$disk" ] || fail "$disk is not a disk"
+  is_mounted "$MNT" && fail "the system TriFS is already mounted"
+  case "$sysgb" in ''|*[!0-9]*) fail "the system part's size must be a whole number of GB";; esac
+  if ! cmd_scan | jq -e --arg d "$disk" '.blank[] | select(.dev==$d)' >/dev/null; then
+    fail "$disk is not a blank disk, so I will not erase it"
+  fi
+  log "combo-formatting $disk: ${sysgb}GB system + the rest shared exFAT"
+  wipefs -a "$disk" >>"$LOG" 2>&1
+  sgdisk --zap-all "$disk" >>"$LOG" 2>&1
+  sgdisk -n 1:0:+"${sysgb}"G -t 1:8300 -c 1:"$LABEL" \
+         -n 2:0:0           -t 2:0700  -c 2:TRIFS-SHARED "$disk" >>"$LOG" 2>&1 || fail "could not partition $disk"
+  partprobe "$disk" >>"$LOG" 2>&1
+  command -v udevadm >/dev/null && udevadm settle --timeout=10 >>"$LOG" 2>&1
+  part1=""; part2=""
+  for _ in $(seq 1 40); do
+    for cand in "${disk}1" "${disk}p1"; do [ -b "$cand" ] && part1="$cand" && break; done
+    for cand in "${disk}2" "${disk}p2"; do [ -b "$cand" ] && part2="$cand" && break; done
+    [ -n "$part1" ] && [ -n "$part2" ] && break
+    partx -a "$disk" >>"$LOG" 2>&1; sleep 0.5
+  done
+  [ -n "$part1" ] && [ -n "$part2" ] || fail "the new partitions did not appear"
+  mkfs.ext4 -F -q -L "$LABEL" -E lazy_itable_init=1,lazy_journal_init=1 "$part1" >>"$LOG" 2>&1 \
+    || fail "could not create the system filesystem"
+  mkfs.exfat -n TRIFS-SHARED "$part2" >>"$LOG" 2>&1 \
+    || fail "could not create the shared filesystem"
+  mount_trifs_dev "$part1" || fail "system partition formatted, but could not mount"
+  jq -nc --arg s "$part1" --arg sh "$part2" '{ok:true,mounted:true,system:$s,shared:$sh}'
+}
+
 # Give a drive to a user: blank disk -> new exFAT partition labelled
 # TRIFS-<USER>; an already-formatted drive -> used as-is, whatever is
 # on it already.
@@ -418,9 +455,14 @@ cmd_user_assign() {
   jq -nc --arg u "$user" --arg d "$part" --arg lab "$lab" '{ok:true,user:$u,device:$d,label:$lab}'
 }
 
-# Mount USER's own drive at /trifs/home/<user> and bind it onto /home/<user>.
+# Mount USER's drive and bind their own folder on it onto /home/<user>.
+# The drive is mounted once into a shared "pool" keyed by its UUID, and each
+# account gets an isolated subfolder inside that pool — so two accounts CAN
+# safely share the same physical drive (the "one drive for everything" case)
+# without seeing each other's files, and nothing changes for an account with
+# a drive all to themselves.
 cmd_user_mount() {
-  local user="$1" id dev mp fst uid gid
+  local user="$1" id dev mp fst uid gid shortid poolmp userdir
   [ -n "$user" ] || fail "usage: trifs user-mount USER"
   id=$(drive_for_user "$user")
   if [ -z "$id" ]; then jq -nc --arg u "$user" '{ok:true,user:$u,mounted:false,reason:"no drive chosen yet"}'; return 0; fi
@@ -428,24 +470,32 @@ cmd_user_mount() {
   if [ -z "$dev" ]; then jq -nc --arg u "$user" '{ok:true,user:$u,mounted:false,reason:"drive not plugged in"}'; return 0; fi
   mp="/trifs/home/$user"
   if is_mounted "$mp"; then jq -nc --arg u "$user" --arg d "$dev" '{ok:true,user:$u,mounted:true,device:$d}'; return 0; fi
-  mkdir -p "$mp"
-  fst=$(probe "$dev" TYPE)
+
   uid=$(id -u "$TRI_USER" 2>/dev/null || echo 1000); gid=$(id -g "$TRI_USER" 2>/dev/null || echo 1000)
-  case "$fst" in
-    exfat) mount -t exfat -o rw,noatime,uid=$uid,gid=$gid,umask=0022 "$dev" "$mp" 2>>"$LOG" \
-             || mount -t exfat-fuse -o rw,uid=$uid,gid=$gid "$dev" "$mp" 2>>"$LOG" ;;
-    vfat)  mount -t vfat -o rw,noatime,uid=$uid,gid=$gid,umask=0022 "$dev" "$mp" 2>>"$LOG" ;;
-    ntfs)  mount -t ntfs-3g -o rw,noatime,uid=$uid,gid=$gid,windows_names "$dev" "$mp" 2>>"$LOG" \
-             || mount -t ntfs3 -o rw,noatime,uid=$uid,gid=$gid "$dev" "$mp" 2>>"$LOG" ;;
-    ext4|ext3) mount -o defaults,noatime "$dev" "$mp" 2>>"$LOG" ;;
-    *)     mount "$dev" "$mp" 2>>"$LOG" ;;
-  esac || { rmdir "$mp" 2>/dev/null; fail "could not mount $dev for $user"; }
-  mkdir -p "$mp/Desktop" "$mp/Documents" "$mp/Downloads" "$mp/Pictures" 2>/dev/null
-  chown -R "$uid:$gid" "$mp" 2>/dev/null
+  shortid=$(echo "$id" | tr -dc 'A-Za-z0-9' | cut -c1-12)
+  poolmp="/mnt/trifs-pool/$shortid"
+  if ! is_mounted "$poolmp"; then
+    mkdir -p "$poolmp"
+    fst=$(probe "$dev" TYPE)
+    case "$fst" in
+      exfat) mount -t exfat -o rw,noatime,uid=$uid,gid=$gid,umask=0022 "$dev" "$poolmp" 2>>"$LOG" \
+               || mount -t exfat-fuse -o rw,uid=$uid,gid=$gid "$dev" "$poolmp" 2>>"$LOG" ;;
+      vfat)  mount -t vfat -o rw,noatime,uid=$uid,gid=$gid,umask=0022 "$dev" "$poolmp" 2>>"$LOG" ;;
+      ntfs)  mount -t ntfs-3g -o rw,noatime,uid=$uid,gid=$gid,windows_names "$dev" "$poolmp" 2>>"$LOG" \
+               || mount -t ntfs3 -o rw,noatime,uid=$uid,gid=$gid "$dev" "$poolmp" 2>>"$LOG" ;;
+      ext4|ext3) mount -o defaults,noatime "$dev" "$poolmp" 2>>"$LOG" ;;
+      *)     mount "$dev" "$poolmp" 2>>"$LOG" ;;
+    esac || { rmdir "$poolmp" 2>/dev/null; fail "could not mount $dev for $user"; }
+  fi
+  userdir="$poolmp/$user"
+  mkdir -p "$userdir/Desktop" "$userdir/Documents" "$userdir/Downloads" "$userdir/Pictures" 2>/dev/null
+  chown -R "$uid:$gid" "$userdir" 2>/dev/null
+  mkdir -p "$mp"
+  mount --bind "$userdir" "$mp" 2>>"$LOG" || fail "could not use $user's folder on $dev"
   if [ -d "/home/$user" ] && ! mountpoint -q "/home/$user" 2>/dev/null; then
     mount --bind "$mp" "/home/$user" 2>>"$LOG" || log "bind of /home/$user onto their own drive failed"
   fi
-  log "mounted $user's own drive ($dev) at $mp"
+  log "mounted $user's folder on $dev at $mp"
   jq -nc --arg u "$user" --arg d "$dev" '{ok:true,user:$u,mounted:true,device:$d}'
 }
 
@@ -463,12 +513,20 @@ cmd_user_status() {
 }
 
 cmd_user_unassign() {
-  local user="$1" tmp
+  local user="$1" tmp id stillused shortid poolmp
   [ -n "$user" ] || fail "usage: trifs user-unassign USER"
   mountpoint -q "/home/$user" 2>/dev/null && { umount "/home/$user" 2>/dev/null || umount -l "/home/$user" 2>/dev/null; }
   mountpoint -q "/trifs/home/$user" 2>/dev/null && { umount "/trifs/home/$user" 2>/dev/null || umount -l "/trifs/home/$user" 2>/dev/null; }
+  id=$(drive_for_user "$user")
   tmp=$(mktemp)
   jq --arg u "$user" 'del(.[$u])' "$USERDRIVES" > "$tmp" 2>/dev/null && mv "$tmp" "$USERDRIVES" || rm -f "$tmp"
+  if [ -n "$id" ]; then
+    stillused=$(jq -r --arg id "$id" '[.[] | select(.uuid==$id)] | length' "$USERDRIVES" 2>/dev/null || echo 0)
+    if [ "${stillused:-0}" = 0 ]; then
+      shortid=$(echo "$id" | tr -dc 'A-Za-z0-9' | cut -c1-12); poolmp="/mnt/trifs-pool/$shortid"
+      mountpoint -q "$poolmp" 2>/dev/null && { umount "$poolmp" 2>/dev/null || umount -l "$poolmp" 2>/dev/null; }
+    fi
+  fi
   jq -nc --arg u "$user" '{ok:true,user:$u,unassigned:true}'
 }
 
@@ -481,11 +539,12 @@ case "${1:-}" in
   create-img)  [ -n "${2:-}" ] && [ -n "${3:-}" ] || fail "usage: trifs create-img PARTITION GB"; cmd_create_img "$2" "$3" ;;
   persist)     persist_on; status_json ;;
   unmount|umount) cmd_unmount ;;
+  combo-format)    [ -n "${2:-}" ] || fail "usage: trifs combo-format DISK [SYSGB]"; cmd_combo_format "$2" "${3:-4}" ;;
   user-scan)       cmd_user_scan ;;
   user-assign)     [ -n "${2:-}" ] && [ -n "${3:-}" ] || fail "usage: trifs user-assign USER DEVICE"; cmd_user_assign "$2" "$3" ;;
   user-mount)      [ -n "${2:-}" ] || fail "usage: trifs user-mount USER"; cmd_user_mount "$2" ;;
   user-mount-all)  cmd_user_mount_all ;;
   user-status)     cmd_user_status ;;
   user-unassign)   [ -n "${2:-}" ] || fail "usage: trifs user-unassign USER"; cmd_user_unassign "$2" ;;
-  *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount|user-scan|user-assign USER DEV|user-mount USER|user-mount-all|user-status|user-unassign USER"}'; exit 2 ;;
+  *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount|combo-format DISK [SYSGB]|user-scan|user-assign USER DEV|user-mount USER|user-mount-all|user-status|user-unassign USER"}'; exit 2 ;;
 esac
