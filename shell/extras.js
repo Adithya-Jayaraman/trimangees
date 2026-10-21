@@ -481,19 +481,25 @@ const EX = (() => {
   function accountEditor(name, done) {
     const cur = name ? { ...USERS[name] } : { color: COLORS[Object.keys(USERS).length % COLORS.length], avatar: EMOJIS[0] };
     const state = { color: cur.color, avatar: cur.avatar || "", avatarImg: cur.avatarImg || "" };
+    // Creating a brand-new account, or editing your own, lets you set a PIN
+    // here. Editing someone else's existing account never shows a PIN field
+    // at all — one account can't lock another one out or take it over.
+    const canSetPin = !name || name === CURRENT_USER;
     const ov = document.createElement("div"); ov.className = "ex-modal";
     const draw = () => {
       ov.innerHTML = `<div class="ex-box wide"><h3>${name ? "Edit " + esc(name) : "Add a person"}</h3>
         <div class="ex-prev" style="${state.avatarImg ? `background:url('${state.avatarImg}') center/cover` : `background:${gradient(state.color)}`}">${state.avatarImg ? "" : state.avatar || (name || "?")[0]}</div>
         <label>Name</label><input id="ae-n" value="${esc(name || "")}" ${name ? "disabled" : ""} maxlength="20">
-        <label>PIN (4 or more digits)</label><input id="ae-p" type="password" maxlength="12" placeholder="${name ? "leave empty to keep" : ""}">
+        ${canSetPin ? `<label>PIN (4 or more digits)</label><input id="ae-p" type="password" maxlength="12" placeholder="${name ? "leave empty to keep" : ""}">`
+                    : `<p class="set-note">Only ${esc(name)} can change their own PIN, from Settings while signed in as them.</p>`}
         <label>Picture</label>${avatarPicker(state)}
         <div class="ex-btns"><button class="set-btn" id="ae-c">Cancel</button><button class="set-btn primary" id="ae-s">Save</button></div></div>`;
-      wirePicker(ov, state, () => { const n = ov.querySelector("#ae-n").value, p = ov.querySelector("#ae-p").value; draw(); ov.querySelector("#ae-n").value = n; ov.querySelector("#ae-p").value = p; });
+      wirePicker(ov, state, () => { const n = ov.querySelector("#ae-n").value, p = ov.querySelector("#ae-p"); const pv = p ? p.value : ""; draw(); ov.querySelector("#ae-n").value = n; const p2 = ov.querySelector("#ae-p"); if (p2) p2.value = pv; });
       ov.querySelector("#ae-c").onclick = () => ov.remove();
       ov.querySelector("#ae-s").onclick = async () => {
         const n = (name || ov.querySelector("#ae-n").value.trim()).replace(/[^\w .-]/g, "");
-        const p = ov.querySelector("#ae-p").value;
+        const pEl = ov.querySelector("#ae-p");
+        const p = canSetPin && pEl ? pEl.value : "";
         if (!n) return toast("Person", "Type a name.");
         if (!name && USERS[n]) return toast("Person", "That name is taken.");
         if ((!name && p.length < 4) || (p && p.length < 4)) return toast("PIN", "Use at least 4 characters.");

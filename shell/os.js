@@ -1974,7 +1974,8 @@ function buildSettings(body, w) {
       const bar = main.querySelector("#sys-bar");
       if (st.total) { bar.hidden = false; bar.firstElementChild.style.width = Math.min(100, st.used / st.total * 100).toFixed(1) + "%"; }
       if (tf.mode === "image" || tf.mode === "partition")
-        btns.innerHTML = `<button class="set-btn" id="sys-eject">Safely unmount TriFS</button>`;
+        btns.innerHTML = `<button class="set-btn" id="sys-eject">Safely unmount TriFS</button>` +
+          (IS_MAX && tf.mode === "partition" ? `<button class="set-btn" id="sys-redo-combo">Redo as one drive (add room for account files)</button>` : "");
       const ej = main.querySelector("#sys-eject");
       if (ej) ej.onclick = async () => {
         if (!(await confirmDialog("Unmount TriFS? Close your programs first. The desktop will restart without a drive."))) return;
@@ -1982,6 +1983,15 @@ function buildSettings(body, w) {
         const r = await kernel.trifsUnmount();
         if (r && r.ok) { toast("TriFS", "Unmounted. Restarting the desktop\u2026"); setTimeout(() => kernel.trifsRestart(), 900); }
         else toast("Couldn't unmount", (r && r.error) || "something is still using it");
+      };
+      const rc = main.querySelector("#sys-redo-combo");
+      if (rc) rc.onclick = async () => {
+        if (!(await confirmDialog("This wipes this whole drive and sets it up again as a small hidden system part plus a shared part accounts can use for their own files. Nothing is on it to lose yet, but this can't be undone. Continue?"))) return;
+        [...wins].forEach(w => closeWin(w));
+        rc.disabled = true; rc.textContent = "Redoing\u2026";
+        const r = await kernel.trifsRedoCombo(4);
+        if (r && r.ok) { toast("TriFS", "Done. Restarting the desktop\u2026"); setTimeout(() => kernel.trifsRestart(), 900); }
+        else { rc.disabled = false; rc.textContent = "Redo as one drive (add room for account files)"; toast("Couldn't redo it", (r && r.error) || "something went wrong"); }
       };
     });
     const sync = main.querySelector("#sys-sync");

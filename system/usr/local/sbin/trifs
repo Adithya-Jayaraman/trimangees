@@ -420,6 +420,27 @@ cmd_combo_format() {
   jq -nc --arg s "$part1" --arg sh "$part2" '{ok:true,mounted:true,system:$s,shared:$sh}'
 }
 
+# For the one-drive case where the system TriFS was already set up as a
+# plain whole-disk format (cmd_format, not cmd_combo_format) and there's no
+# room left on it for anyone's personal files. Wipes the SAME disk and
+# redoes it as system + shared, so nothing else needs to change.
+# Destructive: only ever called with an explicit confirmation from the OS.
+cmd_redo_combo() {
+  local sysgb="${1:-4}" src dev pk disk
+  is_mounted "$MNT" || fail "no system TriFS is mounted to redo"
+  src=$(findmnt -no SOURCE "$MNT") || fail "could not find the mounted device"
+  dev=$(basename "$src")
+  pk=$(lsblk -no PKNAME "/dev/$dev" 2>/dev/null | head -1)
+  [ -n "$pk" ] || fail "could not find the disk under $src"
+  disk="/dev/$pk"
+  log "redoing $disk as one-drive (system + shared), was whole-disk system-only"
+  umount "$MNT" 2>/dev/null || umount -l "$MNT" 2>/dev/null
+  wipefs -a "$disk" >>"$LOG" 2>&1
+  sgdisk --zap-all "$disk" >>"$LOG" 2>&1
+  partprobe "$disk" >>"$LOG" 2>&1
+  cmd_combo_format "$disk" "$sysgb"
+}
+
 # Give a drive to a user: blank disk -> new exFAT partition labelled
 # TRIFS-<USER>; an already-formatted drive -> used as-is, whatever is
 # on it already.
@@ -540,11 +561,12 @@ case "${1:-}" in
   persist)     persist_on; status_json ;;
   unmount|umount) cmd_unmount ;;
   combo-format)    [ -n "${2:-}" ] || fail "usage: trifs combo-format DISK [SYSGB]"; cmd_combo_format "$2" "${3:-4}" ;;
+  redo-combo)      cmd_redo_combo "${2:-4}" ;;
   user-scan)       cmd_user_scan ;;
   user-assign)     [ -n "${2:-}" ] && [ -n "${3:-}" ] || fail "usage: trifs user-assign USER DEVICE"; cmd_user_assign "$2" "$3" ;;
   user-mount)      [ -n "${2:-}" ] || fail "usage: trifs user-mount USER"; cmd_user_mount "$2" ;;
   user-mount-all)  cmd_user_mount_all ;;
   user-status)     cmd_user_status ;;
   user-unassign)   [ -n "${2:-}" ] || fail "usage: trifs user-unassign USER"; cmd_user_unassign "$2" ;;
-  *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount|combo-format DISK [SYSGB]|user-scan|user-assign USER DEV|user-mount USER|user-mount-all|user-status|user-unassign USER"}'; exit 2 ;;
+  *) echo '{"ok":false,"error":"usage: trifs status|scan|mount|format DISK|create-img PART GB|unmount|combo-format DISK [SYSGB]|redo-combo [SYSGB]|user-scan|user-assign USER DEV|user-mount USER|user-mount-all|user-status|user-unassign USER"}'; exit 2 ;;
 esac

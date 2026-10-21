@@ -52,6 +52,11 @@ module.exports = {
   // exFAT part any account can then pick in userAssign).
   comboFormat: (disk, sysgb) => run(['combo-format', String(disk), String(Math.floor(Number(sysgb) || 4))]),
 
+  // TriOS MAX: the mounted system TriFS was set up as a plain whole-disk
+  // format (no room left for anyone's files) — wipe that same disk and
+  // redo it as system + shared, in one step. Destructive; UI must confirm.
+  redoCombo: (sysgb) => run(['redo-combo', String(Math.floor(Number(sysgb) || 4))], 5 * 60 * 1000),
+
   // TriOS MAX: each account picks its own drive, independent of the others.
   userScan:      ()              => usable() ? run(['user-scan'], 120000) : Promise.resolve({ ok: true, drives: [] }),
   userAssign:    (user, dev)     => run(['user-assign', String(user), String(dev)], 5 * 60 * 1000),

@@ -639,6 +639,7 @@ let isMax = false;
 try { isMax = fs.existsSync(MAX_FLAG) || process.env.TRIMANGEES_MAX === '1'; } catch {}
 ipcMain.handle('sys:max', () => isMax);
 ipcMain.handle('trifs:comboFormat', (e, { disk, sysgb }) => trifs.comboFormat(disk, sysgb));
+ipcMain.handle('trifs:redoCombo', (e, { sysgb }) => trifs.redoCombo(sysgb));
 ipcMain.handle('trifs:userScan', () => trifs.userScan());
 ipcMain.handle('trifs:userAssign', (e, { user, dev }) => trifs.userAssign(user, dev));
 ipcMain.handle('trifs:userMount', (e, { user }) => trifs.userMount(user));
