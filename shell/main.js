@@ -573,10 +573,27 @@ ipcMain.handle('update:install', async (e, { zip }) => {
   const sysDir2 = path.join(root, 'system');
   let sysResult = null;
   if (fs.existsSync(sysDir2)) {
-    const r3 = await run(
-      `sudo -n cp -a ${shq(sysDir2)}/. / 2>&1 && ` +
-      `sudo -n chmod +x /usr/local/sbin/trifs 2>/dev/null; ` +
-      `sudo -n systemctl daemon-reload 2>&1`, 60000);
+    // trifs is the root helper almost every disk operation runs through via
+    // "sudo -n". `cp -a` writes it in place, and if the app crashes or gets
+    // restarted mid-copy (exactly what happens on an update that triggers a
+    // restart), that file can be left half-written — breaking every drive
+    // command until it's manually repaired. So it's held out of the bulk
+    // copy and only swapped into place atomically (stage, verify, rename),
+    // once a complete, syntax-checked replacement is ready on disk. Either
+    // the old script or the new one is live at all times, never a partial one.
+    const trifsSrc = path.join(sysDir2, 'usr/local/sbin/trifs');
+    const hasTrifsUpdate = fs.existsSync(trifsSrc);
+    let cmd = '';
+    if (hasTrifsUpdate) cmd += `mv -f ${shq(trifsSrc)} ${shq(trifsSrc + '.excluded')} && `;
+    cmd += `sudo -n cp -a ${shq(sysDir2)}/. / 2>&1`;
+    if (hasTrifsUpdate) {
+      cmd += ` && sudo -n cp ${shq(trifsSrc + '.excluded')} /usr/local/sbin/.trifs.new 2>&1` +
+             ` && sudo -n chmod +x /usr/local/sbin/.trifs.new 2>&1` +
+             ` && sudo -n bash -n /usr/local/sbin/.trifs.new 2>&1` +
+             ` && sudo -n mv -f /usr/local/sbin/.trifs.new /usr/local/sbin/trifs 2>&1`;
+    }
+    cmd += ` ; sudo -n chmod +x /usr/local/sbin/trifs 2>/dev/null; sudo -n systemctl daemon-reload 2>&1`;
+    const r3 = await run(cmd, 60000);
     sysResult = { ok: r3.ok, detail: r3.ok ? '' : (r3.err || r3.out).slice(0, 300) };
   }
   await run(`rm -rf ${shq(dest + '.prev')}; [ -d ${shq(dest)} ] && mv ${shq(dest)} ${shq(dest + '.prev')}; mv ${shq(root)} ${shq(dest)}; rm -rf ${shq(tmp)}`, 60000);
